@@ -2,6 +2,8 @@
 #ifndef OPENGM_FUNCTORS_HXX
 #define OPENGM_FUNCTORS_HXX
 
+#include<cmath>
+
 namespace opengm {
    
 /// \cond HIDDEN_SYMBOLS
@@ -93,7 +95,7 @@ namespace opengm {
       /// \value value to compute power of
       template<class T_In>
       const T operator()(T_In value) {
-         return pow(value, w_);
+         return std::pow(value, w_);
       }
       T w_;
    };
