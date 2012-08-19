@@ -586,10 +586,10 @@ MessagePassing<GM, ACC, UPDATE_RULES, DIST>::arg
    }
    else {
       if (parameter_.isAcyclic_ == opengm::Tribool::True) {       
-         return modeFromFactorMarginal(conf); 
+         return this->modeFromFactorMarginal(conf); 
       }
       else {
-         return modeFromFactorMarginal(conf); 
+         return this->modeFromFactorMarginal(conf); 
          //return modeFromMarginal(conf);
       }
    }
