@@ -21,6 +21,16 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
     # a lot of warnings
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -std=c++98")
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -Wextra -pedantic -std=c++98")
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GXX_VERSION)
+    if(GXX_VERSION VERSION_LESS 4.4)
+        message(WARNING "Your g++ is too old to include QPDC")
+    else()
+        if(GXX_VERSION VERSION_LESS 4.7)
+            set(GXX_CXX11STD_FLAG "-std=c++0x")
+        else()
+            set(GXX_CXX11STD_FLAG "-std=c++11")
+        endif()
+    endif()
 elseif(MSVC)
    add_definitions(-D_SCL_SECURE_NO_WARNINGS)
 endif()
@@ -28,9 +38,8 @@ endif()
 #--------------------------------------------------------------
 # options
 #--------------------------------------------------------------
-OPTION(BUILD_EXAMPLES "Build Examples" ON)
+OPTION(BUILD_EXAMPLES "Build Examples" OFF)
 OPTION(BUILD_COMMANDLINE "Build Commandline" OFF)
-OPTION(WITH_QPDC "Include QPDC (needs C++11 standard)" OFF)
 OPTION(WITH_CPLEX "Include CPLEX" OFF)
 OPTION(WITH_BOOST "Include BOOST" OFF)
 OPTION(WITH_HDF5 "Include HDF5" OFF)
@@ -46,14 +55,6 @@ OPTION(WITH_MATLAB "Activate MatLab-Code" OFF)
 OPTION(WITH_CONVERTER "Build Converter OpenGm1->OpenGm2, requires Boost 1.47!" OFF)
 
 
-#--------------------------------------------------------------
-# QPDC 
-#--------------------------------------------------------------
-if(WITH_QPDC)
-   message(STATUS "build with QPDC")
-else()
-   message(STATUS "build without QPDC")
-endif()
 #--------------------------------------------------------------
 # Cplex
 #--------------------------------------------------------------

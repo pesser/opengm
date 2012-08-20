@@ -121,7 +121,8 @@ void QpDC< GM, ACC >::initProbabilities(
             for( auto pr_it = probabilities.begin(), pr_end = probabilities.end();
                  pr_it != pr_end; ++pr_it
             ) {
-                for( auto nr_labels = pr_it.row_size(), label_n = decltype( nr_labels )( 0 );
+                auto nr_labels = pr_it.row_size();
+                for( decltype( nr_labels ) label_n = 0;
                      label_n < nr_labels; ++label_n
                 ) {
                     if( label_n == 0 ) {    ( *pr_it )[ label_n ] = 1.0; }
@@ -132,7 +133,8 @@ void QpDC< GM, ACC >::initProbabilities(
         case 1:        /* assume a uniform distribution */
             for( auto pr_it = probabilities.begin(), pr_end = probabilities.end();
                  pr_it != pr_end; ++pr_it ) {
-                for( auto nr_labels = pr_it.row_size(), label_n = decltype( nr_labels )( 0 );
+                auto nr_labels = pr_it.row_size();
+                for( decltype( nr_labels ) label_n = 0;
                      label_n < nr_labels; ++label_n
                 ) {
                     ( *pr_it )[ label_n ] = 1.0 / nr_labels;
@@ -149,14 +151,16 @@ void QpDC< GM, ACC >::initProbabilities(
                 interval_points.clear();
                 interval_points.push_back( 0.0 );
                 interval_points.push_back( 1.0 );
-                for( auto nr_labels = pr_it.row_size(), label_n = decltype( nr_labels )( 0 );
+                auto nr_labels = pr_it.row_size();
+                for( decltype( nr_labels ) label_n = 0;
                      label_n < ( nr_labels - 1 ); ++label_n
                 ) {
                     interval_points.push_back( InferValue( std::rand() ) / RAND_MAX );
                 }
 
                 std::sort( interval_points.begin(), interval_points.end() );
-                for( auto nr_labels = pr_it.row_size(), label_n = decltype( nr_labels )( 0 );
+                nr_labels = pr_it.row_size();
+                for( decltype( nr_labels ) label_n = 0;
                      label_n < nr_labels; ++label_n
                 ) {
                     ( *pr_it )[ label_n ] = interval_points[ label_n + 1 ] - interval_points[ label_n ];
@@ -222,7 +226,8 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     visitor.begin( *this );
 
     for( auto bNMIt = neighbourMargins.begin(); bNMIt != bNMItEnd; ++ bNMIt ) {
-        for( auto nLabels = bNMIt.row_size(), labelN = decltype( nLabels )( 0 ); labelN < nLabels; ++labelN ) {
+        auto nLabels = bNMIt.row_size();
+        for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
             calcNeighbourMargin( bNMIt, labelN ); 
         }
     }
@@ -316,7 +321,8 @@ void QpDC< GM, ACC >::calcNeighbourMargin(
                 varIsFirst = false;
                 labeling[ 1 ] = varLabel;
             }
-            for( auto nLabels = gm_.numberOfLabels( other_var_index ), labelN =  decltype(nLabels)( 0 ); labelN < nLabels; ++labelN ) {
+            auto nLabels = gm_.numberOfLabels( other_var_index );
+            for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
                 if( varIsFirst ) {
                     labeling[1] = labelN;
                 } else {
@@ -440,15 +446,15 @@ typename GM::ValueType QpDC< GM, ACC >::valueRelaxed( ) const {
     auto prob2BIT = probabilities.cbegin();
 
     ValueType value = 0;
-    for( auto nFact = gm_.numberOfFactors(),
-              factN = decltype( nFact )( 0 );
+    auto nFact = gm_.numberOfFactors();
+    for( decltype( nFact ) factN = 0;
          factN < nFact;
          ++factN
     ) {
         var1Index = gm_.variableOfFactor( factN, 0 );
         prob1BIT.set_row( var1Index );
-        for( auto nLabel1 = gm_.numberOfLabels( var1Index ),
-                  label1N = decltype( nLabel1 )( 0 );
+        auto nLabel1 = gm_.numberOfLabels( var1Index );
+        for( decltype( nLabel1 ) label1N = 0;
              label1N < nLabel1;
              ++label1N
         ) {
@@ -457,8 +463,8 @@ typename GM::ValueType QpDC< GM, ACC >::valueRelaxed( ) const {
             if( gm_.numberOfVariables( factN ) == 2 ) {
                 var2Index = gm_.variableOfFactor( factN, 1 );
                 prob2BIT.set_row( var2Index );
-                for( auto nLabel2 = gm_.numberOfLabels( var2Index ),
-                          label2N = decltype( nLabel2 )( 0 );
+                auto nLabel2 = gm_.numberOfLabels( var2Index );
+                for( decltype( nLabel2 ) label2N = 0;
                      label2N < nLabel2;
                      ++label2N
                 ) {
@@ -526,17 +532,20 @@ aFactorFunctor_Base< GM, ACC >::aFactorFunctor_Base( const GM& gm ) : gm_( gm ) 
 
     ValueType min = 0;
     ValueType tmpValue;
-    for( auto nFact = gm.numberOfFactors(), factN = decltype( nFact )( 0 );
+    auto nFact = gm.numberOfFactors();
+    for( decltype( nFact ) factN = 0;
          factN < nFact;
          ++factN
     ) {
         if( gm[ factN ].numberOfVariables() == 2 ) {
-            for( auto nLabels1 = gm[ factN ].shape( 0 ), label1N = decltype( nLabels1 )( 0 );
+            auto nLabels1 = gm[ factN ].shape( 0 );
+            for( decltype( nLabels1 ) label1N = 0;
                  label1N < nLabels1;
                  ++label1N
             ) {
                 labeling[ 0 ] = label1N;
-                for( auto nLabels2 = gm[ factN ].shape( 1 ), label2N = decltype( nLabels2 )( 0 );
+                auto nLabels2 = gm[ factN ].shape( 1 );
+                for( decltype( nLabels2 ) label2N = 0;
                      label2N < nLabels2;
                      ++label2N 
                 ) {
