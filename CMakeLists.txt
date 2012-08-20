@@ -30,6 +30,7 @@ endif()
 #--------------------------------------------------------------
 OPTION(BUILD_EXAMPLES "Build Examples" ON)
 OPTION(BUILD_COMMANDLINE "Build Commandline" OFF)
+OPTION(WITH_QPDC "Include QPDC (needs C++11 standard)" OFF)
 OPTION(WITH_CPLEX "Include CPLEX" OFF)
 OPTION(WITH_BOOST "Include BOOST" OFF)
 OPTION(WITH_HDF5 "Include HDF5" OFF)
@@ -45,6 +46,14 @@ OPTION(WITH_MATLAB "Activate MatLab-Code" OFF)
 OPTION(WITH_CONVERTER "Build Converter OpenGm1->OpenGm2, requires Boost 1.47!" OFF)
 
 
+#--------------------------------------------------------------
+# QPDC 
+#--------------------------------------------------------------
+if(WITH_QPDC)
+   message(STATUS "build with QPDC")
+else()
+   message(STATUS "build without QPDC")
+endif()
 #--------------------------------------------------------------
 # Cplex
 #--------------------------------------------------------------
