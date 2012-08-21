@@ -21,16 +21,6 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
     # a lot of warnings
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -std=c++98")
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -Wextra -pedantic -std=c++98")
-    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GXX_VERSION)
-    if(GXX_VERSION VERSION_LESS 4.4)
-        message(WARNING "Your g++ is too old to include QPDC")
-    else()
-        if(GXX_VERSION VERSION_LESS 4.7)
-            set(GXX_CXX11STD_FLAG "-std=c++0x")
-        else()
-            set(GXX_CXX11STD_FLAG "-std=c++11")
-        endif()
-    endif()
 elseif(MSVC)
    add_definitions(-D_SCL_SECURE_NO_WARNINGS)
 endif()
@@ -54,6 +44,37 @@ OPTION(WITH_CONICBUNDLE "Include ConicBundleLibrary" OFF)
 OPTION(WITH_MATLAB "Activate MatLab-Code" OFF)
 OPTION(WITH_CONVERTER "Build Converter OpenGm1->OpenGm2, requires Boost 1.47!" OFF)
 
+
+#--------------------------------------------------------------
+# set default build type to release 
+#--------------------------------------------------------------
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING 
+        "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE)
+endif()
+
+#--------------------------------------------------------------
+# QPDC
+#--------------------------------------------------------------
+if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GXX_VERSION)
+    if(GXX_VERSION VERSION_LESS 4.4)
+        message(WARNING "Your g++ is too old to include QPDC")
+    else()
+        add_definitions(-DWITH_QPDC)
+        if(GXX_VERSION VERSION_LESS 4.7)
+            set(CXX11STD_FLAG "-std=c++0x")
+        else()
+            set(CXX11STD_FLAG "-std=c++11")
+        endif()
+    endif()
+else()
+    OPTION(WITH_QPDC "With QPDC (requires C++11 support)" OFF)
+endif()
+
+if(WITH_QPDC)
+    SET(CXX11STD_FLAG " " CACHE STRING "C++11 compiler flag")
+endif()
 
 #--------------------------------------------------------------
 # Cplex

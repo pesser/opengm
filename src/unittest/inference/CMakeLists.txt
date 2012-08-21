@@ -54,9 +54,9 @@ else()
 endif()
 add_test(test-astar  ${CMAKE_CURRENT_BINARY_DIR}/test-astar)
 
-if(GXX_CXX11STD_FLAG)
+if(CXX11STD_FLAG)
    add_executable(test-qpdc test_qpdc.cxx ${headers})
-   set_target_properties(test-qpdc PROPERTIES COMPILE_FLAGS ${GXX_CXX11STD_FLAG})
+   set_target_properties(test-qpdc PROPERTIES COMPILE_FLAGS ${CXX11STD_FLAG})
    add_test(test-qpdc ${CMAKE_CURRENT_BINARY_DIR}/test-qpdc)
 endif()
 

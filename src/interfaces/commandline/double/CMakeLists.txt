@@ -2,6 +2,11 @@
     add_executable(opengm_max_prod opengm_max_prod.cxx ${headers})
     add_executable(opengm_min_sum opengm_min_sum.cxx ${headers})
     add_executable(opengm_min_sum_small opengm_min_sum_small.cxx ${headers})
+
+    if(CXX11STD_FLAG)
+      set_target_properties(opengm_min_sum PROPERTIES COMPILE_FLAGS ${CXX11STD_FLAG})
+    endif()
+
     if(WITH_LIBDAI)
       add_executable(opengm_min_sum_libdai opengm_min_sum_libdai.cxx ${headers})
       target_link_libraries(opengm_min_sum_libdai ${LIBDAI_LIBRARY})
