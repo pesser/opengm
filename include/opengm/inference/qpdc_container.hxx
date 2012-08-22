@@ -119,7 +119,7 @@ public:
     }
 
     const_row_iterator cend() const {
-        return const_row_iterator( row_iterators_, columns_, 0 );
+        return const_row_iterator( row_iterators_, columns_, columns_.size() );
     }
 
     row_iterator get_row_iterator( std::size_t row_index ) {
