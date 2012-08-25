@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <type_traits>
 
+namespace opengm {
 namespace qpdc_container {
 
 template< class Iterator, class Container >
@@ -144,5 +145,6 @@ public:
 
 };
 
+}
 }
 #endif
