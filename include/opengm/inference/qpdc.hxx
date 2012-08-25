@@ -68,7 +68,6 @@ public:
 
     // custom implementation of interface
     InferenceTermination arg( std::vector< LabelType >& labeling, const std::size_t N = 1 ) const;
-    ValueType value() const;
 
 private:
     // subroutines
@@ -77,9 +76,10 @@ private:
     template< class VisitorType >
     InferenceTermination inferRelaxed( VisitorType& );
 
-    void decodeToIntegral();
+    void decodeToIntegral() const;
 
-    InferValue calcCondExp( IndexType, LabelType );
+    InferValue calcCondExp( IndexType i, LabelType l ) const;
+    InferValue calcCondExp( IndexType i, LabelType l, const container& probs ) const;
 
     void calcNeighbourMargin( const var_iterator& out, std::size_t varLabel );
     InferValue calcLagrange( const const_var_iterator& message, const const_var_iterator& neighbourMargin, const std::vector< char >& feasible );
@@ -89,10 +89,11 @@ private:
 
     // state
     const GraphicalModelType& gm_;
-    std::vector< LabelType > labeling_;
+    mutable std::vector< LabelType > labeling_;
 
     /* caches */
     container neighbourMargins, messages, probabilities;
+    mutable container prob_tmp;
 
     /* functor class for adjusted factor evaluation */
     aFactorFunctor< GM, ACC > aFactor;
@@ -107,6 +108,7 @@ QpDC< GM, ACC >::QpDC(
     neighbourMargins( ctorHelper( gm ) ),
     messages( ctorHelper( gm ) ),
     probabilities( ctorHelper( gm ) ),
+    prob_tmp( ctorHelper( gm ) ),
     aFactor( gm ) {
 
     initProbabilities( parameter.init_method_ );
@@ -289,8 +291,6 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
 
     } /* end outer loop */
 
-    decodeToIntegral();
-
     visitor.end( *this );
 
     return NORMAL;
@@ -359,18 +359,22 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
 
 
 template< class GM, class ACC >
-void QpDC< GM, ACC >::decodeToIntegral() {
-    auto bPrItEnd = probabilities.end();
+void QpDC< GM, ACC >::decodeToIntegral() const {
+
+    probabilities.store( prob_tmp );
 
     InferValue maxConditionalExpectation, tmpConditionalExpectation;
     
-    for( auto bPrIt = probabilities.begin(); bPrIt != bPrItEnd; ++bPrIt ) {
+    for( auto bPrItEnd = prob_tmp.end(), bPrIt = prob_tmp.begin(); 
+         bPrIt != bPrItEnd; ++bPrIt 
+    ) {
         auto nLabels = bPrIt.row_size();
         auto varInd = bPrIt.row_index();
         labeling_[ varInd ] = 0;
-        maxConditionalExpectation = calcCondExp( varInd, 0 );
-        for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
-            tmpConditionalExpectation = calcCondExp( varInd, labelN );
+        maxConditionalExpectation = calcCondExp( varInd, 0, prob_tmp );
+
+        for( decltype( nLabels ) labelN = 1; labelN < nLabels; ++labelN ) {
+            tmpConditionalExpectation = calcCondExp( varInd, labelN, prob_tmp );
             if( tmpConditionalExpectation >  maxConditionalExpectation ) {
                 labeling_[ varInd ] = labelN;
                 maxConditionalExpectation = tmpConditionalExpectation;
@@ -388,16 +392,27 @@ void QpDC< GM, ACC >::decodeToIntegral() {
 }
 
 
+
 template< class GM, class ACC >
 typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
 ( 
-    IndexType varInd, LabelType l  
-) {
+    IndexType varInd, LabelType l 
+) const {
+
+    return calcCondExp( varInd, l, probabilities );
+}
+    
+template< class GM, class ACC >
+typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
+( 
+    IndexType varInd, LabelType l, const container& probs  
+) const {
+
     InferValue condExp = 0;
     LabelType labeling[2];
-    auto nFact = gm_.numberOfFactors( varInd );
     bool varIsFirst;
     
+    auto nFact = gm_.numberOfFactors( varInd );
     for( decltype( nFact ) factN = 0; factN < nFact; ++factN ) {
         auto factInd = gm_.factorOfVariable( varInd, factN );
 
@@ -409,7 +424,7 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
                 varIsFirst = true;
             }
 
-            auto oBIt = probabilities.get_row_iterator( otherInd );
+            auto oBIt = probs.cget_row_iterator( otherInd );
             auto nLabels = oBIt.row_size();
             for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
                 if( varIsFirst ) {
@@ -430,11 +445,6 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
     }
 
     return condExp;
-}
-
-template< class GM, class ACC >
-typename GM::ValueType QpDC< GM, ACC >::value() const {
-    return valueRelaxed( );
 }
 
 template< class GM, class ACC >
@@ -490,6 +500,7 @@ InferenceTermination QpDC< GM, ACC >::arg
 (
     std::vector<LabelType>& labeling, const std::size_t N
 ) const {
+    decodeToIntegral();
     labeling = labeling_;
 
     return NORMAL;
