@@ -76,7 +76,7 @@ private:
     template< class VisitorType >
     InferenceTermination inferRelaxed( VisitorType& );
 
-    void decodeToIntegral() const;
+    void decodeToIntegral( std::vector< LabelType >& labeling ) const;
 
     InferValue calcCondExp( IndexType i, LabelType l ) const;
     InferValue calcCondExp( IndexType i, LabelType l, const container& probs ) const;
@@ -89,7 +89,6 @@ private:
 
     // state
     const GraphicalModelType& gm_;
-    mutable std::vector< LabelType > labeling_;
 
     /* caches */
     container neighbourMargins, messages, probabilities;
@@ -104,7 +103,7 @@ private:
 template< class GM, class ACC >
 QpDC< GM, ACC >::QpDC( 
     const GM& gm, const Parameter& parameter 
-) : gm_( gm ), labeling_( gm.numberOfVariables(), 0), parameter_( parameter ), 
+) : gm_( gm ), parameter_( parameter ), 
     neighbourMargins( ctorHelper( gm ) ),
     messages( ctorHelper( gm ) ),
     probabilities( ctorHelper( gm ) ),
@@ -359,7 +358,7 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
 
 
 template< class GM, class ACC >
-void QpDC< GM, ACC >::decodeToIntegral() const {
+void QpDC< GM, ACC >::decodeToIntegral( std::vector< LabelType >& labeling ) const {
 
     probabilities.store( prob_tmp );
 
@@ -370,19 +369,19 @@ void QpDC< GM, ACC >::decodeToIntegral() const {
     ) {
         auto nLabels = bPrIt.row_size();
         auto varInd = bPrIt.row_index();
-        labeling_[ varInd ] = 0;
+        labeling[ varInd ] = 0;
         maxConditionalExpectation = calcCondExp( varInd, 0, prob_tmp );
 
         for( decltype( nLabels ) labelN = 1; labelN < nLabels; ++labelN ) {
             tmpConditionalExpectation = calcCondExp( varInd, labelN, prob_tmp );
             if( tmpConditionalExpectation >  maxConditionalExpectation ) {
-                labeling_[ varInd ] = labelN;
+                labeling[ varInd ] = labelN;
                 maxConditionalExpectation = tmpConditionalExpectation;
             }
          }
         // adapt probabilities to fit assignment 
         for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
-            if( labelN == labeling_[ varInd ] ) {
+            if( labelN == labeling[ varInd ] ) {
                 ( *bPrIt )[ labelN ] = 1;
             } else {
                 ( *bPrIt )[ labelN ] = 0;
@@ -500,8 +499,8 @@ InferenceTermination QpDC< GM, ACC >::arg
 (
     std::vector<LabelType>& labeling, const std::size_t N
 ) const {
-    decodeToIntegral();
-    labeling = labeling_;
+    labeling.resize( gm_.numberOfVariables() );
+    decodeToIntegral( labeling );
 
     return NORMAL;
 }
