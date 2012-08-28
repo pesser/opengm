@@ -19,87 +19,144 @@ class aFactorFunctor_Base;
 template< class GM, class ACC >
 class aFactorFunctor;
 
-
+/** \brief Algorithm for minimization/maximization of 
+ *         additive second order models.
+ *
+ *  Implementation of [1] by Patrick Esser. Based on a 
+ *  relaxation of the original problem to a quadratic program,
+ *  which in turn again gets represented as the difference of
+ *  convex functions for optimization.
+ *  The relaxed problem is guaranteed to decrease (resp. increase)
+ *  monotonically and converges to a local optimum, while the 
+ *  value of the recovered integral assignment is guaranteed to
+ *  be less (resp. greater) than or equal to the value of the 
+ *  relaxed problem.
+ *  
+ *  [1] Kumar, A., Zilberstein, S. (2011). Message-Passing Algorithms for Quadratic Programming Formulations of MAP Estimation.
+ */
 template< class GM, class ACC >
 class QpDC : public Inference< GM, ACC > {
 public:
-    /* choose suitable type for inference */
+    /// chooses suitable type for inference
     typedef typename
     std::conditional< std::is_floating_point< typename GM::ValueType >::value, typename GM::ValueType, double >::type InferValue;
 
-    // typedefs, see inference.hxx
+    /// type of graphical model
     typedef GM GraphicalModelType;
-    OPENGM_GM_TYPE_TYPEDEFS
+    /// domain of modelled function
+    typedef typename GraphicalModelType::LabelType LabelType;
+    /// range of modelled function
+    typedef typename GraphicalModelType::ValueType ValueType;
+    /// type used for indexing
+    typedef typename GraphicalModelType::IndexType IndexType;
 
+    /// type used to cache values during inference
     typedef typename qpdc_container::qpdc_container< InferValue > container;
 
+    /// iterator to modify cached values
     typedef typename container::row_iterator var_iterator;
+    /// iterator to read cached values
     typedef typename container::const_row_iterator const_var_iterator;
 
     typedef VerboseVisitor< QpDC< GM, ACC > > VerboseVisitorType;
     typedef TimingVisitor< QpDC< GM, ACC > > TimingVisitorType;
     typedef EmptyVisitor< QpDC< GM, ACC > > EmptyVisitorType;
 
+    /// parameter class of qpdc
     struct Parameter {
+        /// constructor with default values
         Parameter(
-            const std::size_t maxIterations = 1000,
+            const std::size_t maxIterations = 10000,
             const ValueType convergenceThreshold = 0,
-            const int init_method = 42
+            const int init_method = 1
         ) : maxIterations_( maxIterations ),
             convergenceThreshold_( convergenceThreshold ),
             init_method_( init_method ) {
         }
 
+        /// maximum number of iterations (default = 10000)
         std::size_t maxIterations_;
+
+        /// for values greater than zero, the algorithm will stop if the progress is below this value (default = 0)
+        ///
+        /// if greater than zero, the progress has to be calculated at each iteration which can 
+        /// decrease the performance
         ValueType convergenceThreshold_;
+
+        /// method used for initialization of starting point (default = 1)
+        /// 
+        /// 0 - set all variables to first label
+        ///
+        /// 1 - for each variable, assume a uniform distribution acrosss the labels
+        ///
+        /// all other integer values will be treated as a seed for random assignment of probabilities
         int init_method_;
     };
 
-    // minimal interface required by opengm
+    /// returns the name of the inference algorithm, QpDC
     std::string name() const;
+
+    /// returns a const reference to the graphical model the algorithm is working with
     const GraphicalModelType& graphicalModel() const;
+
+    /// starts the inference with empty visitor
     InferenceTermination infer();
 
+    /// starts the inference with given visitor
     template< class VisitorType >
     InferenceTermination infer( VisitorType& );
 
-    //constructor
+    /// initializes algorithm 
     QpDC( const GraphicalModelType& gm, const Parameter& parameter = Parameter() );
 
-    // custom implementation of interface
+    /// stores currently best integral assignment in given vector
     InferenceTermination arg( std::vector< LabelType >& labeling, const std::size_t N = 1 ) const;
 
 private:
-    // subroutines
+    /// returns value of quadratic program relaxation
     ValueType valueRelaxed( ) const; 
 
+    /// main implementation of the algorithm
     template< class VisitorType >
     InferenceTermination inferRelaxed( VisitorType& );
 
+    /// decodes cached probabilities to integer assignment
     void decodeToIntegral( std::vector< LabelType >& labeling ) const;
 
+    /// calculates conditional expectation of objective for currently cached distribution
     InferValue calcCondExp( IndexType i, LabelType l ) const;
+    /// calculates conditional expectation of objective for given distribution
     InferValue calcCondExp( IndexType i, LabelType l, const container& probs ) const;
 
+    /// calculates some internally used values to cache them in container associated with out
     void calcNeighbourMargin( const var_iterator& out, std::size_t varLabel );
+    /// calculates the lagrangian for a variable
     InferValue calcLagrange( const const_var_iterator& message, const const_var_iterator& neighbourMargin, const std::vector< char >& feasible );
 
+    /// initializes starting distribution according to method (see Parameter)
     void initProbabilities( int method );
+    /// helper method to call constructor of cache container
     std::vector< std::size_t > ctorHelper( const GraphicalModelType& );
 
-    // state
+    /// const reference to graphical model being used
     const GraphicalModelType& gm_;
 
-    /* caches */
+    // caches
     container neighbourMargins, messages, probabilities;
     mutable container prob_tmp;
 
-    /* functor class for adjusted factor evaluation */
+    /// functor instance for adjusted factor evaluation 
     aFactorFunctor< GM, ACC > aFactor;
 
+    /// parameter instance used
     Parameter parameter_;
 };
 
+
+/** allocates space and initializes probabilities cache to feasible starting point
+ *  \param gm graphical model to run inference on
+ *  \param parameter optional instance of Parameter
+ */
 template< class GM, class ACC >
 QpDC< GM, ACC >::QpDC( 
     const GM& gm, const Parameter& parameter 
@@ -171,6 +228,10 @@ void QpDC< GM, ACC >::initProbabilities(
     }
 }
 
+/** calculates a vector such that entry i contains the number of labels for 
+ *  variable i, which gets used by the constructor of the caches container
+ *  \param gm graphical model on which the algorithm will run
+ */
 template< class GM, class ACC >
 std::vector< std::size_t > QpDC< GM, ACC >::ctorHelper( 
     const GraphicalModelType& gm 
@@ -196,12 +257,17 @@ const GM& QpDC< GM, ACC >::graphicalModel() const {
 }
 
 
+/** calls infer with empty visitor
+ */
 template< class GM, class ACC >
 InferenceTermination QpDC< GM, ACC >::infer() {
     EmptyVisitorType visitor;
     return infer( visitor );
 }
 
+/** after running the inference, arg will give a labeling of a local optimum
+ *  \param visitor instance of visitor to call
+ */
 template< class GM, class ACC >
 template< class VisitorType >
 InferenceTermination QpDC< GM, ACC >::infer( 
@@ -356,7 +422,10 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
 }
     
 
-
+/** recovers a integral solution out of the currently cached probabilities
+ *  and stores them in the given vector
+ *  \param[out] labeling where the integral assignment gets stored
+ */
 template< class GM, class ACC >
 void QpDC< GM, ACC >::decodeToIntegral( std::vector< LabelType >& labeling ) const {
 
@@ -391,7 +460,8 @@ void QpDC< GM, ACC >::decodeToIntegral( std::vector< LabelType >& labeling ) con
 }
 
 
-
+/** calls calcCondExp with currently cached probabilities
+ */
 template< class GM, class ACC >
 typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
 ( 
@@ -401,6 +471,13 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
     return calcCondExp( varInd, l, probabilities );
 }
     
+/** calculates the expected value of the function modelled by the graphical model
+ *  given that variable i takes on label l and all the other variables are 
+ *  are distributed according to the given distribution
+ *  \param varInd index of variable to condition on
+ *  \param l      label to condition this variable on
+ *  \param probs  distribution for variables
+ */
 template< class GM, class ACC >
 typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
 ( 
@@ -446,6 +523,10 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
     return condExp;
 }
 
+/** evaluates quadratic program formulation with currently cached probabilities 
+ *  which corresponds to calculating the expectation of the modelled function
+ *  when the variables are distributed according to the cached probabilities
+ */
 template< class GM, class ACC >
 typename GM::ValueType QpDC< GM, ACC >::valueRelaxed( ) const {
     IndexType var1Index, var2Index;
@@ -494,6 +575,11 @@ typename GM::ValueType QpDC< GM, ACC >::valueRelaxed( ) const {
     
 
 
+/** decodes currently cached probabilities to integral assignment and stores this
+ *  assignment in given vector
+ *  \param[out] labeling vector to store integral assignment
+ *  \param N ignored
+ */
 template< class GM, class ACC >
 InferenceTermination QpDC< GM, ACC >::arg
 (
@@ -505,6 +591,11 @@ InferenceTermination QpDC< GM, ACC >::arg
     return NORMAL;
 }
 
+/** \brief Base class for wrapper around factor evaluation used by QPDC.
+ *
+ *  Adjusts the factor evaluation to switch between Maximization and 
+ *  Minimization and to fulfill the assumption of positive factors.
+ */
 template< class GM, class ACC >
 class aFactorFunctor_Base {
 public:
@@ -573,6 +664,8 @@ aFactorFunctor_Base< GM, ACC >::aFactorFunctor_Base( const GM& gm ) : gm_( gm ) 
 
 }
 
+/** \brief Generic factor adjustment class used by QPDC.
+ */
 template< class GM, class ACC >
 class aFactorFunctor : public aFactorFunctor_Base< GM, ACC > {
 public:
@@ -585,6 +678,8 @@ public:
     ValueType operator() ( const IndexType factorIndex, Iterator labeling );
 };
 
+/** \brief Adjusts factor evaluation for Maximization.
+ */
 template< class GM >
 class aFactorFunctor< GM, Maximizer > : public aFactorFunctor_Base< GM, Maximizer > {
 public:
@@ -601,6 +696,8 @@ public:
     }
 };
 
+/** \brief Adjusts factor evaluation for Minimization.
+ */
 template< class GM >
 class aFactorFunctor< GM, Minimizer > : public aFactorFunctor_Base< GM, Minimizer > {
 public:
