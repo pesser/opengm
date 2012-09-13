@@ -68,10 +68,12 @@ public:
         Parameter(
             const std::size_t maxIterations = 10000,
             const ValueType convergenceThreshold = 0,
-            const int init_method = 1
+            const int init_method = 1,
+            const bool convex_approximation = false
         ) : maxIterations_( maxIterations ),
             convergenceThreshold_( convergenceThreshold ),
-            init_method_( init_method ) {
+            init_method_( init_method ),
+            convex_approximation_( convex_approximation ) {
         }
 
         /// maximum number of iterations (default = 10000)
@@ -91,6 +93,9 @@ public:
         ///
         /// all other integer values will be treated as a seed for random assignment of probabilities
         int init_method_;
+
+		/// boolean value of whether to use a convex approximation to the original problem or not
+		bool convex_approximation_;
     };
 
     /// returns the name of the inference algorithm, QpDC
@@ -299,7 +304,6 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         }
     }
 
-
     for( auto iterations = decltype( parameter_.maxIterations_ )( 0 ); 
          iterations < parameter_.maxIterations_ && parameter_.convergenceThreshold_ < progress; ++iterations ) {
 
@@ -310,7 +314,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
             auto varInd = bMIt.row_index();
             auto nLabels = bMIt.row_size();
             for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
-                ( *bMIt )[ labelN ] = ( *bPrIt )[ labelN ] + ( calcCondExp( varInd, labelN ) / ( *bNMIt )[ labelN ] );
+                ( *bMIt )[ labelN ] = ( ( *bPrIt )[ labelN ] * ( *bNMIt )[ labelN ] ) + calcCondExp( varInd, labelN );
             }
         }
 
@@ -334,7 +338,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
                 /* calculate probabilities for sub-sub-problem */
                 for( decltype( rowSize ) rowIndex = 0; rowIndex < rowSize; ++rowIndex ) {
                     if( feasibleUpToNow[ rowIndex ] ) {
-                        ( *bPrIt )[ rowIndex ] = ( *bMIt )[ rowIndex ] - ( lagrangian / ( *bNMIt )[ rowIndex ] );
+                        ( *bPrIt )[ rowIndex ] = ( ( *bMIt )[ rowIndex ] - lagrangian ) / ( *bNMIt )[ rowIndex ];
                         if( ( *bPrIt )[ rowIndex ] < 0 ) {
                             feasibleUpToNow[ rowIndex ] = false;
                             notFeasible = true;
@@ -410,8 +414,8 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
     auto nLabels = m.row_size();
     for( decltype( nLabels) labelN = 0; labelN < nLabels; ++labelN ) {
         if( f[ labelN ] ) {
-            lagrangian += ( *m )[ labelN ];
-            normalization += ( 1.0 / ( *nm )[ labelN ] );
+            lagrangian += ( *m )[ labelN ] / ( *nm )[ labelN ];
+            normalization += 1.0 / ( *nm )[ labelN ];
         }
     }
 
