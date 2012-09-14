@@ -36,10 +36,11 @@ template <class IO, class GM, class ACC>
 inline QPDCCaller<IO, GM, ACC>::QPDCCaller(IO& ioIn)
    : InferenceCallerBase<IO, GM, ACC>(name_, description, ioIn) {
 	addArgument( Size_TArgument< >( qpdcParameter_.maxIterations_, "mi", "maximum_iterations", "maximum number of iterations" ) );
-	addArgument( DoubleArgument< >( qpdcParameter_.convergenceThreshold_, "cs", "convergence_threshold",
+	addArgument( DoubleArgument< >( qpdcParameter_.convergenceThreshold_, "ct", "convergence_threshold",
 									"stop inference if progress is below convergence threshold (expect a decrease in performance!)" ) );
-	addArgument( IntArgument< >( qpdcParameter_.init_method_, "in", "init_method", 
+	addArgument( IntArgument< >(    qpdcParameter_.init_method_, "in", "init_method", 
 									"method to choose starting point( 0 = all label 0, 1 = uniform, x = seed for random point )" ) );
+    addArgument( BoolArgument(      qpdcParameter_.convex_approximation_, "ca", "convex_approximation", "use a convex approximation to the problem" ) );
 }
 
 template <class IO, class GM, class ACC>

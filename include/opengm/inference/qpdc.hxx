@@ -136,7 +136,16 @@ private:
     /// calculates some internally used values to cache them in container associated with out
     void calcNeighbourMargin( const var_iterator& out, std::size_t varLabel );
     /// calculates the lagrangian for a variable
-    InferValue calcLagrange( const const_var_iterator& message, const const_var_iterator& neighbourMargin, const std::vector< char >& feasible );
+    InferValue calcLagrange( const const_var_iterator& message, 
+        const const_var_iterator& neighbourMargin, const const_var_iterator& diagonal,
+        const std::vector< char >& feasible );
+
+    template< bool V > class typeWrap { };
+
+    /// calculates the diagonal entries needed to make the factor matrix positive definite
+    void calcDiagonals( container& diagonals, typeWrap< true > dummy );
+    /// makes sure to set diagonal entries to zero if convex approximation is deactivated
+    void calcDiagonals( container& diagonals, typeWrap< false > dummy );
 
     /// initializes starting distribution according to method (see Parameter)
     void initProbabilities( int method );
@@ -147,7 +156,7 @@ private:
     const GraphicalModelType& gm_;
 
     // caches
-    container neighbourMargins, messages, probabilities;
+    container neighbourMargins, messages, probabilities, diagonals;
     mutable container prob_tmp;
 
     /// functor instance for adjusted factor evaluation 
@@ -169,6 +178,7 @@ QpDC< GM, ACC >::QpDC(
     neighbourMargins( ctorHelper( gm ) ),
     messages( ctorHelper( gm ) ),
     probabilities( ctorHelper( gm ) ),
+    diagonals( ctorHelper( gm ) ),
     prob_tmp( ctorHelper( gm ) ),
     aFactor( gm ) {
 
@@ -297,6 +307,12 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
 
     visitor.begin( *this );
 
+    if( parameter_.convex_approximation_ ) {
+        calcDiagonals( diagonals, typeWrap< true >() );
+    } else {
+        calcDiagonals( diagonals, typeWrap< false >() );
+    }
+
     for( auto bNMIt = neighbourMargins.begin(); bNMIt != bNMItEnd; ++ bNMIt ) {
         auto nLabels = bNMIt.row_size();
         for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
@@ -321,9 +337,10 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         // solve kkt greedy
         for( auto bPrIt = probabilities.begin(), 
                   bMIt = messages.begin(),
-                  bNMIt = neighbourMargins.begin();
+                  bNMIt = neighbourMargins.begin(),
+                  bDIt = diagonals.begin();
              bMIt != bMItEnd; 
-             ++bPrIt, ++bMIt, ++bNMIt ) {
+             ++bPrIt, ++bMIt, ++bNMIt, ++bDIt ) {
             bool notFeasible = true;
             feasibleUpToNow.assign( bPrIt.row_size(), true );
 
@@ -333,7 +350,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
                  ++innerIt ) { 
                 notFeasible = false;
 
-                InferValue lagrangian = calcLagrange( bMIt, bNMIt, feasibleUpToNow );
+                InferValue lagrangian = calcLagrange( bMIt, bNMIt, bDIt, feasibleUpToNow );
 
                 /* calculate probabilities for sub-sub-problem */
                 for( decltype( rowSize ) rowIndex = 0; rowIndex < rowSize; ++rowIndex ) {
@@ -406,7 +423,10 @@ void QpDC< GM, ACC >::calcNeighbourMargin(
 
 template< class GM, class ACC >
 typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange( 
-    const const_var_iterator& m, const const_var_iterator& nm, const std::vector< char >& f 
+    const const_var_iterator& m, 
+    const const_var_iterator& nm, 
+    const const_var_iterator& d,
+    const std::vector< char >& f 
 ) {
     InferValue lagrangian = 0;
     InferValue normalization = 0;
@@ -414,8 +434,8 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
     auto nLabels = m.row_size();
     for( decltype( nLabels) labelN = 0; labelN < nLabels; ++labelN ) {
         if( f[ labelN ] ) {
-            lagrangian += ( *m )[ labelN ] / ( *nm )[ labelN ];
-            normalization += 1.0 / ( *nm )[ labelN ];
+            lagrangian += ( *m )[ labelN ] / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
+            normalization += 1.0 / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
         }
     }
 
@@ -424,7 +444,60 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
 
     return lagrangian;
 }
-    
+
+template< class GM, class ACC >
+void QpDC< GM, ACC >::calcDiagonals( container& diagonals, typeWrap< true > dummy ) {
+    LabelType labeling[ 2 ];
+    bool var_i_first = true;
+
+    auto diag_it_end = diagonals.end();
+    for( auto diag_i = diagonals.begin(); diag_i != diag_it_end; ++diag_i ) {
+        auto var_i = diag_i.row_index();
+        auto n_labels = diag_i.row_size();
+        for( decltype( n_labels ) label_n = 0; label_n < n_labels; ++label_n ) {
+            InferValue d = 0;
+            auto n_factors = gm_.numberOfFactors( var_i );
+            for( decltype( n_factors ) factor_n = 0; factor_n < n_factors; ++factor_n ) {
+                auto fact_i = gm_.factorOfVariable( var_i, factor_n );
+                if( gm_.numberOfVariables( fact_i ) == 2 ) {
+                    auto var_j = gm_.variableOfFactor( fact_i, 0 );
+                    if( var_j == var_i ) {
+                        var_i_first = true;
+                        var_j = gm_.variableOfFactor( fact_i, 1 );
+                    } else {
+                        var_i_first = false;
+                    }
+                    auto n_labels_j = gm_.numberOfLabels( var_j );
+                    for( decltype( n_labels_j ) label_n_j = 0; 
+                         label_n_j < n_labels_j; ++label_n_j 
+                       ) {
+                        if( var_i_first ) {
+                            labeling[ 0 ] = label_n;
+                            labeling[ 1 ] = label_n_j;
+                        } else {
+                            labeling[ 0 ] = label_n_j;
+                            labeling[ 1 ] = label_n;
+                        }
+                        d += aFactor( fact_i, labeling );
+                    }
+                }         
+            }
+            ( *diag_i )[ label_n ] = d / 2.0;
+        }
+    }
+}
+
+template< class GM, class ACC >
+void QpDC< GM, ACC >::calcDiagonals( container& diagonals, typeWrap< false > dummy ) {
+    auto diag_it_end = diagonals.end();
+
+    for( auto diag_i = diagonals.begin(); diag_i != diag_it_end; ++diag_i ) {
+        auto n_labels = diag_i.row_size();
+        for( decltype( n_labels ) label_n = 0; label_n < n_labels; ++label_n ) {
+            ( *diag_i )[ label_n ] = 0;
+        }
+    }
+}
 
 /** recovers a integral solution out of the currently cached probabilities
  *  and stores them in the given vector
