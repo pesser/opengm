@@ -22,6 +22,7 @@
 #include "../../common/caller/loc_caller.hxx"
 #include "../../common/caller/gibbs_caller.hxx"
 #include "../../common/caller/swendsenwang_caller.hxx"
+#include "../../common/caller/qpdc_caller.hxx"
 
 #ifdef WITH_TRWS
 #include "../../common/caller/trws_caller.hxx"
@@ -98,7 +99,9 @@ int main(int argc, char** argv) {
       interface::LazyFlipperCaller<InterfaceType, GmType, AccumulatorType>,
       interface::LOCCaller<InterfaceType, GmType, AccumulatorType>,
       interface::GibbsCaller<InterfaceType, GmType, AccumulatorType>,
-      interface::SwendsenWangCaller<InterfaceType, GmType, AccumulatorType>
+      interface::SwendsenWangCaller<InterfaceType, GmType, AccumulatorType>,
+      interface::QPDCCaller<InterfaceType, GmType, AccumulatorType>,
+      opengm::meta::ListEnd
       >::type NativeInferenceTypeList;
 
    typedef meta::TypeListGenerator <

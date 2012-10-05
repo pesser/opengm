@@ -28,7 +28,7 @@ endif()
 #--------------------------------------------------------------
 # options
 #--------------------------------------------------------------
-OPTION(BUILD_EXAMPLES "Build Examples" ON)
+OPTION(BUILD_EXAMPLES "Build Examples" OFF)
 OPTION(BUILD_COMMANDLINE "Build Commandline" OFF)
 OPTION(WITH_CPLEX "Include CPLEX" OFF)
 OPTION(WITH_BOOST "Include BOOST" OFF)
@@ -44,6 +44,14 @@ OPTION(WITH_CONICBUNDLE "Include ConicBundleLibrary" OFF)
 OPTION(WITH_MATLAB "Activate MatLab-Code" OFF)
 OPTION(WITH_CONVERTER "Build Converter OpenGm1->OpenGm2, requires Boost 1.47!" OFF)
 OPTION(BUILD_PYTHON_WRAPPER "build python wrapper" OFF)
+
+#--------------------------------------------------------------
+# set default build type to release 
+#--------------------------------------------------------------
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING 
+        "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE)
+endif()
 
 #--------------------------------------------------------------
 # Cplex
