@@ -28,7 +28,7 @@ endif()
 #--------------------------------------------------------------
 # options
 #--------------------------------------------------------------
-OPTION(BUILD_EXAMPLES "Build Examples" OFF)
+OPTION(BUILD_EXAMPLES "Build Examples" ON)
 OPTION(BUILD_COMMANDLINE "Build Commandline" OFF)
 OPTION(WITH_CPLEX "Include CPLEX" OFF)
 OPTION(WITH_BOOST "Include BOOST" OFF)
