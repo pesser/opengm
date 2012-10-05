@@ -3,10 +3,21 @@
 #define QPDC_CONTAINER_H
 
 #include <cstddef>
-#include <type_traits>
 
 namespace opengm {
 namespace qpdc_container {
+
+template<bool B, class T = void>
+    struct enable_if {};
+ 
+template<class T>
+    struct enable_if<true, T> { typedef T type; };
+
+template<class T, class U>
+    struct is_same { static const bool value = false; };
+
+template<class T>
+    struct is_same<T, T> { static const bool value = true; };
 
 template< class Iterator, class Container >
 class qpdc_iterator { 
@@ -27,7 +38,7 @@ public:
     /* implicit conversion to const_iterator */
     template< class Iter >
     qpdc_iterator( const qpdc_iterator< Iter, 
-                                        typename std::enable_if< std::is_same< Iter, iterator >::value,
+                                        typename enable_if< is_same< Iter, iterator >::value,
                                                                 Container >::type >& nonconst_qpdc_iterator ) :
         row_iterators_( nonconst_qpdc_iterator.row_iterators_ ), columns_( nonconst_qpdc_iterator.columns_ ), row_index_( nonconst_qpdc_iterator.row_index_ ) {}
 
@@ -100,7 +111,7 @@ public:
         data_( std::accumulate( columns.begin(), columns.end(), 0 ) ) {
         
         row_iterators_[ 0 ] = data_.begin();
-        for( auto nr_of_rows = columns.size(), i = decltype( nr_of_rows )( 0 );
+        for( std::size_t nr_of_rows = columns.size(), i = 0;
              i < nr_of_rows; ++i 
            ) {
             row_iterators_[ i + 1 ] = row_iterators_[ i ] + columns[ i ];

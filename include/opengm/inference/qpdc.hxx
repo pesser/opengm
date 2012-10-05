@@ -3,7 +3,6 @@
 #define QPDC_H
 
 #include <vector>
-#include <type_traits>
 #include <string>
 
 #include <opengm/opengm.hxx>
@@ -39,7 +38,7 @@ class QpDC : public Inference< GM, ACC > {
 public:
     /// chooses suitable type for inference
     typedef typename
-    std::conditional< std::is_floating_point< typename GM::ValueType >::value, typename GM::ValueType, double >::type InferValue;
+    GM::ValueType InferValue;
 
     /// type of graphical model
     typedef GM GraphicalModelType;
@@ -191,11 +190,11 @@ void QpDC< GM, ACC >::initProbabilities(
 ) {
     switch( method ) {
         case 0:        /* set all variables to first label */
-            for( auto pr_it = probabilities.begin(), pr_end = probabilities.end();
+            for( var_iterator pr_it = probabilities.begin(), pr_end = probabilities.end();
                  pr_it != pr_end; ++pr_it
             ) {
-                auto nr_labels = pr_it.row_size();
-                for( decltype( nr_labels ) label_n = 0;
+                std::size_t nr_labels = pr_it.row_size();
+                for( std::size_t label_n = 0;
                      label_n < nr_labels; ++label_n
                 ) {
                     if( label_n == 0 ) {    ( *pr_it )[ label_n ] = 1.0; }
@@ -204,10 +203,10 @@ void QpDC< GM, ACC >::initProbabilities(
             }
             break;
         case 1:        /* assume a uniform distribution */
-            for( auto pr_it = probabilities.begin(), pr_end = probabilities.end();
+            for( var_iterator pr_it = probabilities.begin(), pr_end = probabilities.end();
                  pr_it != pr_end; ++pr_it ) {
-                auto nr_labels = pr_it.row_size();
-                for( decltype( nr_labels ) label_n = 0;
+                std::size_t nr_labels = pr_it.row_size();
+                for( std::size_t label_n = 0;
                      label_n < nr_labels; ++label_n
                 ) {
                     ( *pr_it )[ label_n ] = 1.0 / nr_labels;
@@ -218,14 +217,14 @@ void QpDC< GM, ACC >::initProbabilities(
             std::srand( std::abs( method ) );
             std::vector< InferValue > interval_points;
 
-            for( auto pr_it = probabilities.begin(), pr_end = probabilities.end();
+            for( var_iterator pr_it = probabilities.begin(), pr_end = probabilities.end();
                  pr_it != pr_end; ++pr_it
             ) {
                 interval_points.clear();
                 interval_points.push_back( 0.0 );
                 interval_points.push_back( 1.0 );
-                auto nr_labels = pr_it.row_size();
-                for( decltype( nr_labels ) label_n = 0;
+                std::size_t nr_labels = pr_it.row_size();
+                for( std::size_t label_n = 0;
                      label_n < ( nr_labels - 1 ); ++label_n
                 ) {
                     interval_points.push_back( InferValue( std::rand() ) / RAND_MAX );
@@ -233,7 +232,7 @@ void QpDC< GM, ACC >::initProbabilities(
 
                 std::sort( interval_points.begin(), interval_points.end() );
                 nr_labels = pr_it.row_size();
-                for( decltype( nr_labels ) label_n = 0;
+                for( std::size_t label_n = 0;
                      label_n < nr_labels; ++label_n
                 ) {
                     ( *pr_it )[ label_n ] = interval_points[ label_n + 1 ] - interval_points[ label_n ];
@@ -252,7 +251,7 @@ std::vector< std::size_t > QpDC< GM, ACC >::ctorHelper(
     const GraphicalModelType& gm 
 ) {
     std::vector< std::size_t > nLabels_of_var( gm.numberOfVariables() );
-    for( auto nVars = nLabels_of_var.size(), varN = decltype( nVars )( 0 );
+    for( std::size_t nVars = nLabels_of_var.size(), varN = 0;
          varN < nVars; ++varN 
        ) {
         nLabels_of_var[ varN ] = gm.numberOfLabels( varN );
@@ -297,13 +296,13 @@ template< class VisitorType >
 InferenceTermination QpDC<GM, ACC>::inferRelaxed( 
     VisitorType& visitor 
 ) {
-    auto bNMItEnd = neighbourMargins.end();
-    auto bMItEnd = messages.end();
+    var_iterator bNMItEnd = neighbourMargins.end();
+    var_iterator bMItEnd = messages.end();
     std::vector< char > feasibleUpToNow;    /* intention of vector< bool > */
     
-    auto oldValue = valueRelaxed();
-    decltype( oldValue ) newValue;
-    auto progress = decltype( oldValue )( 1000 );
+    ValueType oldValue = valueRelaxed();
+    ValueType newValue;
+    ValueType progress = 1000;
 
     visitor.begin( *this );
 
@@ -313,29 +312,29 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         calcDiagonals( diagonals, typeWrap< false >() );
     }
 
-    for( auto bNMIt = neighbourMargins.begin(); bNMIt != bNMItEnd; ++ bNMIt ) {
-        auto nLabels = bNMIt.row_size();
-        for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
+    for( var_iterator bNMIt = neighbourMargins.begin(); bNMIt != bNMItEnd; ++ bNMIt ) {
+        std::size_t nLabels = bNMIt.row_size();
+        for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
             calcNeighbourMargin( bNMIt, labelN ); 
         }
     }
 
-    for( auto iterations = decltype( parameter_.maxIterations_ )( 0 ); 
-         iterations < parameter_.maxIterations_ && parameter_.convergenceThreshold_ < progress; ++iterations ) {
+    for( std::size_t iterations = 0; 
+         iterations < std::size_t( parameter_.maxIterations_ ) && parameter_.convergenceThreshold_ < progress; ++iterations ) {
 
         // set up messages
-        for( auto bMIt = messages.begin(),
+        for( var_iterator bMIt = messages.begin(),
                   bPrIt = probabilities.begin(),
                   bNMIt = neighbourMargins.begin(); bMIt != bMItEnd; ++bMIt, ++bPrIt, ++bNMIt ) {
-            auto varInd = bMIt.row_index();
-            auto nLabels = bMIt.row_size();
-            for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
+            std::size_t varInd = bMIt.row_index();
+            std::size_t nLabels = bMIt.row_size();
+            for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
                 ( *bMIt )[ labelN ] = ( ( *bPrIt )[ labelN ] * ( *bNMIt )[ labelN ] ) + calcCondExp( varInd, labelN );
             }
         }
 
         // solve kkt greedy
-        for( auto bPrIt = probabilities.begin(), 
+        for( var_iterator bPrIt = probabilities.begin(), 
                   bMIt = messages.begin(),
                   bNMIt = neighbourMargins.begin(),
                   bDIt = diagonals.begin();
@@ -344,8 +343,8 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
             bool notFeasible = true;
             feasibleUpToNow.assign( bPrIt.row_size(), true );
 
-            auto rowSize = bPrIt.row_size(); 
-            for( decltype( rowSize ) innerIt = 0; 
+            std::size_t rowSize = bPrIt.row_size(); 
+            for( std::size_t innerIt = 0; 
                  notFeasible; 
                  ++innerIt ) { 
                 notFeasible = false;
@@ -353,7 +352,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
                 InferValue lagrangian = calcLagrange( bMIt, bNMIt, bDIt, feasibleUpToNow );
 
                 /* calculate probabilities for sub-sub-problem */
-                for( decltype( rowSize ) rowIndex = 0; rowIndex < rowSize; ++rowIndex ) {
+                for( std::size_t rowIndex = 0; rowIndex < rowSize; ++rowIndex ) {
                     if( feasibleUpToNow[ rowIndex ] ) {
                         ( *bPrIt )[ rowIndex ] = ( ( *bMIt )[ rowIndex ] - lagrangian ) / ( *bNMIt )[ rowIndex ];
                         if( ( *bPrIt )[ rowIndex ] < 0 ) {
@@ -390,15 +389,15 @@ void QpDC< GM, ACC >::calcNeighbourMargin(
     bool varIsFirst = false;
     ( *out )[ varLabel ] = 0;
 
-    auto varInd = out.row_index();
-    auto nFact = gm_.numberOfFactors( varInd );
+    std::size_t varInd = out.row_index();
+    std::size_t nFact = gm_.numberOfFactors( varInd );
 
-    decltype( varLabel ) labeling[2];
-    for( decltype( nFact ) factN = 0; factN < nFact; ++factN ) {
-        auto factInd = gm_.factorOfVariable( varInd, factN );
+    std::size_t labeling[2];
+    for( std::size_t factN = 0; factN < nFact; ++factN ) {
+        std::size_t factInd = gm_.factorOfVariable( varInd, factN );
 
         if( gm_.numberOfVariables( factInd ) == 2 ) {
-            auto other_var_index = gm_.variableOfFactor( factInd, 0 );
+            std::size_t other_var_index = gm_.variableOfFactor( factInd, 0 );
             if( other_var_index == varInd ) {
                 varIsFirst = true;
                 labeling[ 0 ] = varLabel;
@@ -407,8 +406,8 @@ void QpDC< GM, ACC >::calcNeighbourMargin(
                 varIsFirst = false;
                 labeling[ 1 ] = varLabel;
             }
-            auto nLabels = gm_.numberOfLabels( other_var_index );
-            for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
+            std::size_t nLabels = gm_.numberOfLabels( other_var_index );
+            for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
                 if( varIsFirst ) {
                     labeling[1] = labelN;
                 } else {
@@ -431,8 +430,8 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
     InferValue lagrangian = 0;
     InferValue normalization = 0;
 
-    auto nLabels = m.row_size();
-    for( decltype( nLabels) labelN = 0; labelN < nLabels; ++labelN ) {
+    std::size_t nLabels = m.row_size();
+    for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
         if( f[ labelN ] ) {
             lagrangian += ( *m )[ labelN ] / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
             normalization += 1.0 / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
@@ -450,25 +449,25 @@ void QpDC< GM, ACC >::calcDiagonals( container& diagonals, typeWrap< true > dumm
     LabelType labeling[ 2 ];
     bool var_i_first = true;
 
-    auto diag_it_end = diagonals.end();
-    for( auto diag_i = diagonals.begin(); diag_i != diag_it_end; ++diag_i ) {
-        auto var_i = diag_i.row_index();
-        auto n_labels = diag_i.row_size();
-        for( decltype( n_labels ) label_n = 0; label_n < n_labels; ++label_n ) {
+    var_iterator diag_it_end = diagonals.end();
+    for( var_iterator diag_i = diagonals.begin(); diag_i != diag_it_end; ++diag_i ) {
+        std::size_t var_i = diag_i.row_index();
+        std::size_t n_labels = diag_i.row_size();
+        for( std::size_t label_n = 0; label_n < n_labels; ++label_n ) {
             InferValue d = 0;
-            auto n_factors = gm_.numberOfFactors( var_i );
-            for( decltype( n_factors ) factor_n = 0; factor_n < n_factors; ++factor_n ) {
-                auto fact_i = gm_.factorOfVariable( var_i, factor_n );
+            std::size_t n_factors = gm_.numberOfFactors( var_i );
+            for( std::size_t factor_n = 0; factor_n < n_factors; ++factor_n ) {
+                std::size_t fact_i = gm_.factorOfVariable( var_i, factor_n );
                 if( gm_.numberOfVariables( fact_i ) == 2 ) {
-                    auto var_j = gm_.variableOfFactor( fact_i, 0 );
+                    std::size_t var_j = gm_.variableOfFactor( fact_i, 0 );
                     if( var_j == var_i ) {
                         var_i_first = true;
                         var_j = gm_.variableOfFactor( fact_i, 1 );
                     } else {
                         var_i_first = false;
                     }
-                    auto n_labels_j = gm_.numberOfLabels( var_j );
-                    for( decltype( n_labels_j ) label_n_j = 0; 
+                    std::size_t n_labels_j = gm_.numberOfLabels( var_j );
+                    for( std::size_t label_n_j = 0; 
                          label_n_j < n_labels_j; ++label_n_j 
                        ) {
                         if( var_i_first ) {
@@ -489,11 +488,11 @@ void QpDC< GM, ACC >::calcDiagonals( container& diagonals, typeWrap< true > dumm
 
 template< class GM, class ACC >
 void QpDC< GM, ACC >::calcDiagonals( container& diagonals, typeWrap< false > dummy ) {
-    auto diag_it_end = diagonals.end();
+    var_iterator diag_it_end = diagonals.end();
 
-    for( auto diag_i = diagonals.begin(); diag_i != diag_it_end; ++diag_i ) {
-        auto n_labels = diag_i.row_size();
-        for( decltype( n_labels ) label_n = 0; label_n < n_labels; ++label_n ) {
+    for( var_iterator diag_i = diagonals.begin(); diag_i != diag_it_end; ++diag_i ) {
+        std::size_t n_labels = diag_i.row_size();
+        for( std::size_t label_n = 0; label_n < n_labels; ++label_n ) {
             ( *diag_i )[ label_n ] = 0;
         }
     }
@@ -510,15 +509,15 @@ void QpDC< GM, ACC >::decodeToIntegral( std::vector< LabelType >& labeling ) con
 
     InferValue maxConditionalExpectation, tmpConditionalExpectation;
     
-    for( auto bPrItEnd = prob_tmp.end(), bPrIt = prob_tmp.begin(); 
+    for( var_iterator bPrItEnd = prob_tmp.end(), bPrIt = prob_tmp.begin(); 
          bPrIt != bPrItEnd; ++bPrIt 
     ) {
-        auto nLabels = bPrIt.row_size();
-        auto varInd = bPrIt.row_index();
+        std::size_t nLabels = bPrIt.row_size();
+        std::size_t varInd = bPrIt.row_index();
         labeling[ varInd ] = 0;
         maxConditionalExpectation = calcCondExp( varInd, 0, prob_tmp );
 
-        for( decltype( nLabels ) labelN = 1; labelN < nLabels; ++labelN ) {
+        for( std::size_t labelN = 1; labelN < nLabels; ++labelN ) {
             tmpConditionalExpectation = calcCondExp( varInd, labelN, prob_tmp );
             if( tmpConditionalExpectation >  maxConditionalExpectation ) {
                 labeling[ varInd ] = labelN;
@@ -526,7 +525,7 @@ void QpDC< GM, ACC >::decodeToIntegral( std::vector< LabelType >& labeling ) con
             }
          }
         // adapt probabilities to fit assignment 
-        for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
+        for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
             if( labelN == labeling[ varInd ] ) {
                 ( *bPrIt )[ labelN ] = 1;
             } else {
@@ -565,21 +564,21 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
     LabelType labeling[2];
     bool varIsFirst;
     
-    auto nFact = gm_.numberOfFactors( varInd );
-    for( decltype( nFact ) factN = 0; factN < nFact; ++factN ) {
-        auto factInd = gm_.factorOfVariable( varInd, factN );
+    std::size_t nFact = gm_.numberOfFactors( varInd );
+    for( std::size_t factN = 0; factN < nFact; ++factN ) {
+        std::size_t factInd = gm_.factorOfVariable( varInd, factN );
 
         if( gm_.numberOfVariables( factInd ) == 2 ) {
-            auto otherInd = gm_.variableOfFactor( factInd, 0 );
+            std::size_t otherInd = gm_.variableOfFactor( factInd, 0 );
             varIsFirst = false;
             if( otherInd == varInd ) {
                 otherInd = gm_.variableOfFactor( factInd, 1 );
                 varIsFirst = true;
             }
 
-            auto oBIt = probs.cget_row_iterator( otherInd );
-            auto nLabels = oBIt.row_size();
-            for( decltype( nLabels ) labelN = 0; labelN < nLabels; ++labelN ) {
+            const_var_iterator oBIt = probs.cget_row_iterator( otherInd );
+            std::size_t nLabels = oBIt.row_size();
+            for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
                 if( varIsFirst ) {
                     labeling[0] = l;
                     labeling[1] = labelN;
@@ -609,19 +608,19 @@ typename GM::ValueType QpDC< GM, ACC >::valueRelaxed( ) const {
     IndexType var1Index, var2Index;
     LabelType labeling[ 2 ];
     InferValue prob[ 2 ];
-    auto prob1BIT = probabilities.cbegin();
-    auto prob2BIT = probabilities.cbegin();
+    const_var_iterator prob1BIT = probabilities.cbegin();
+    const_var_iterator prob2BIT = probabilities.cbegin();
 
     ValueType value = 0;
-    auto nFact = gm_.numberOfFactors();
-    for( decltype( nFact ) factN = 0;
+    std::size_t nFact = gm_.numberOfFactors();
+    for( std::size_t factN = 0;
          factN < nFact;
          ++factN
     ) {
         var1Index = gm_.variableOfFactor( factN, 0 );
         prob1BIT.set_row( var1Index );
-        auto nLabel1 = gm_.numberOfLabels( var1Index );
-        for( decltype( nLabel1 ) label1N = 0;
+        std::size_t nLabel1 = gm_.numberOfLabels( var1Index );
+        for( std::size_t label1N = 0;
              label1N < nLabel1;
              ++label1N
         ) {
@@ -630,8 +629,8 @@ typename GM::ValueType QpDC< GM, ACC >::valueRelaxed( ) const {
             if( gm_.numberOfVariables( factN ) == 2 ) {
                 var2Index = gm_.variableOfFactor( factN, 1 );
                 prob2BIT.set_row( var2Index );
-                auto nLabel2 = gm_.numberOfLabels( var2Index );
-                for( decltype( nLabel2 ) label2N = 0;
+                std::size_t nLabel2 = gm_.numberOfLabels( var2Index );
+                for( std::size_t label2N = 0;
                      label2N < nLabel2;
                      ++label2N
                 ) {
@@ -693,37 +692,37 @@ protected:
 
 template< class T, bool V >
 struct set_sign {
-    static constexpr T sign = T( 1 );
+    static const T sign = T( 1 );
 };
 
 template< class T >
 struct set_sign< T, false > {
-    static constexpr T sign = T( -1 );
+    static const T sign = T( -1 );
 };    
 
 template< class GM, class ACC >
 aFactorFunctor_Base< GM, ACC >::aFactorFunctor_Base( const GM& gm ) : gm_( gm ) {
     typedef typename GM::ValueType ValueType;
-    ValueType sign = set_sign< ValueType, std::is_same< ACC, Maximizer >::value >::sign;
+    ValueType sign = set_sign< ValueType, qpdc_container::is_same< ACC, Maximizer >::value >::sign;
 
     LabelType labeling[ 2 ];
 
     ValueType min = 0;
     ValueType tmpValue;
-    auto nFact = gm.numberOfFactors();
-    for( decltype( nFact ) factN = 0;
+    std::size_t nFact = gm.numberOfFactors();
+    for( std::size_t factN = 0;
          factN < nFact;
          ++factN
     ) {
         if( gm[ factN ].numberOfVariables() == 2 ) {
-            auto nLabels1 = gm[ factN ].shape( 0 );
-            for( decltype( nLabels1 ) label1N = 0;
+            std::size_t nLabels1 = gm[ factN ].shape( 0 );
+            for( std::size_t label1N = 0;
                  label1N < nLabels1;
                  ++label1N
             ) {
                 labeling[ 0 ] = label1N;
-                auto nLabels2 = gm[ factN ].shape( 1 );
-                for( decltype( nLabels2 ) label2N = 0;
+                std::size_t nLabels2 = gm[ factN ].shape( 1 );
+                for( std::size_t label2N = 0;
                      label2N < nLabels2;
                      ++label2N 
                 ) {
