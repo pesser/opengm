@@ -20,10 +20,7 @@
 #include "../../common/caller/astar_caller.hxx"
 #include "../../common/caller/lazyflipper_caller.hxx"
 #include "../../common/caller/loc_caller.hxx"
-
-#ifdef WITH_QPDC
 #include "../../common/caller/qpdc_caller.hxx"
-#endif
 
 #ifdef WITH_TRWS
 #include "../../common/caller/trws_caller.hxx"
@@ -99,9 +96,7 @@ int main(int argc, char** argv) {
       interface::AStarCaller<InterfaceType, GmType, AccumulatorType>,
       interface::LazyFlipperCaller<InterfaceType, GmType, AccumulatorType>,
       interface::LOCCaller<InterfaceType, GmType, AccumulatorType>,
-#ifdef WITH_QPDC
       interface::QPDCCaller<InterfaceType, GmType, AccumulatorType>,
-#endif
       opengm::meta::ListEnd
       >::type NativeInferenceTypeList;
 

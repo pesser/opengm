@@ -54,29 +54,6 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 #--------------------------------------------------------------
-# QPDC
-#--------------------------------------------------------------
-if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
-    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GXX_VERSION)
-    if(GXX_VERSION VERSION_LESS 4.4)
-        message(WARNING "Your g++ is too old to include QPDC")
-    else()
-        add_definitions(-DWITH_QPDC)
-        if(GXX_VERSION VERSION_LESS 4.7)
-            set(CXX11STD_FLAG "")
-        else()
-            set(CXX11STD_FLAG "")
-        endif()
-    endif()
-else()
-    OPTION(WITH_QPDC "With QPDC (requires C++11 support)" OFF)
-endif()
-
-if(WITH_QPDC)
-    SET(CXX11STD_FLAG " " CACHE STRING "C++11 compiler flag")
-endif()
-
-#--------------------------------------------------------------
 # Cplex
 #--------------------------------------------------------------
 if(WITH_CPLEX)
