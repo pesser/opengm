@@ -314,7 +314,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     probabilities.store( prob_before );
     ValueType progress = 1000;
 
-    visitor.begin( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress_argXlipschitz" ), 0.0 );
+    visitor.begin( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), 0.0 );
 
     setDiagAndLipschitz( diagonals, parameter_.convex_approximation_, ( parameter_.convergenceThreshold_ > 0 ) );
 
@@ -373,15 +373,15 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         } /* end for each variable */
 
 
-        progress = l1metric( prob_before, probabilities ) * lipschitzConst;
+        progress = l1metric( prob_before, probabilities );
         probabilities.store( prob_before );
 
-        visitor( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress_argXlipschitz" ), progress );
+        visitor( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), progress );
 
 
     } /* end outer loop */
 
-    visitor.end( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress_argXlipschitz" ), progress );
+    visitor.end( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), progress );
 
     return NORMAL;
 }
