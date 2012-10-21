@@ -151,11 +151,18 @@ private:
     /// helper method to call constructor of cache container
     std::vector< std::size_t > ctorHelper( const GraphicalModelType& );
 
+    void setDiagAndLipschitz( container& diagonals, bool convex, bool ct);
+    /// used for convergence criterium
+    InferValue l1metric( const container prob1, const container prob2 );
+    /// calculates lipschitz constant
+    void calcLipschitz( const container& diagonals );
+
     /// const reference to graphical model being used
     const GraphicalModelType& gm_;
 
     // caches
     container neighbourMargins, messages, probabilities, diagonals;
+    container prob_before;
     mutable container prob_tmp;
 
     /// functor instance for adjusted factor evaluation 
@@ -163,6 +170,9 @@ private:
 
     /// parameter instance used
     Parameter parameter_;
+
+    /// lipchitz constant of relaxation
+    InferValue lipschitzConst;
 };
 
 
@@ -178,6 +188,7 @@ QpDC< GM, ACC >::QpDC(
     messages( ctorHelper( gm ) ),
     probabilities( ctorHelper( gm ) ),
     diagonals( ctorHelper( gm ) ),
+    prob_before( ctorHelper( gm ) ),
     prob_tmp( ctorHelper( gm ) ),
     aFactor( gm ) {
 
@@ -300,17 +311,12 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     var_iterator bMItEnd = messages.end();
     std::vector< char > feasibleUpToNow;    /* intention of vector< bool > */
     
-    ValueType oldValue = valueRelaxed();
-    ValueType newValue;
+    probabilities.store( prob_before );
     ValueType progress = 1000;
 
     visitor.begin( *this );
 
-    if( parameter_.convex_approximation_ ) {
-        calcDiagonals( diagonals, typeWrap< true >() );
-    } else {
-        calcDiagonals( diagonals, typeWrap< false >() );
-    }
+    setDiagAndLipschitz( diagonals, parameter_.convex_approximation_, ( parameter_.convergenceThreshold_ > 0 ) );
 
     for( var_iterator bNMIt = neighbourMargins.begin(); bNMIt != bNMItEnd; ++ bNMIt ) {
         std::size_t nLabels = bNMIt.row_size();
@@ -369,9 +375,8 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         visitor( *this );
 
         if( parameter_.convergenceThreshold_ > 0 ) {
-            newValue = valueRelaxed();
-            progress = std::abs( newValue - oldValue );
-            oldValue = newValue;
+            progress = l1metric( prob_before, probabilities ) * lipschitzConst;
+            probabilities.store( prob_before );
         }
 
     } /* end outer loop */
@@ -433,8 +438,8 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
     std::size_t nLabels = m.row_size();
     for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
         if( f[ labelN ] ) {
-            lagrangian += ( *m )[ labelN ] / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
-            normalization += 1.0 / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
+            lagrangian += ( *m )[ labelN ] / ( ( *d )[ labelN ] + ( *nm )[ labelN ] );
+            normalization += 1.0 / ( ( *d )[ labelN ] + ( *nm )[ labelN ] );
         }
     }
 
@@ -443,6 +448,24 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
 
     return lagrangian;
 }
+
+template< class GM, class ACC >
+void QpDC< GM, ACC >::setDiagAndLipschitz( container& diagonals, bool convex, bool ct ) {
+    if( convex ) {
+        calcDiagonals( diagonals, typeWrap< true >() );
+
+        if( ct ) {
+            calcLipschitz( diagonals );
+        }
+    } else {
+        if( ct ) {
+            calcDiagonals( diagonals, typeWrap< true >() );
+            calcLipschitz( diagonals );
+        }
+        calcDiagonals( diagonals, typeWrap< false >() );
+    }
+}
+
 
 template< class GM, class ACC >
 void QpDC< GM, ACC >::calcDiagonals( container& diagonals, typeWrap< true > dummy ) {
@@ -481,7 +504,7 @@ void QpDC< GM, ACC >::calcDiagonals( container& diagonals, typeWrap< true > dumm
                     }
                 }         
             }
-            ( *diag_i )[ label_n ] = d / 2.0;
+            ( *diag_i )[ label_n ] = d;
         }
     }
 }
@@ -666,6 +689,77 @@ InferenceTermination QpDC< GM, ACC >::arg
 
     return NORMAL;
 }
+
+/** calculates the l1metric between two vectors given in containers
+ */
+template< class GM, class ACC >
+typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::l1metric
+( 
+    const container prob1, const container prob2 
+) {
+    InferValue diff = 0;
+    for( const_var_iterator prob1_end = prob1.cend(), 
+         prob1_varIt = prob1.cbegin(), prob2_varIt = prob2.cbegin();
+         prob1_varIt != prob1_end; ++prob1_varIt, ++prob2_varIt
+       ) {
+        for( std::size_t nrStates = prob1_varIt.row_size(), stateN = 0;
+             stateN < nrStates; ++stateN
+           ) {
+            diff += std::abs( ( *prob1_varIt )[ stateN ] - 
+                              ( *prob2_varIt )[ stateN ]
+                    );
+        }
+    }
+
+    return diff;
+}
+
+template<class GM, class ACC >
+void QpDC< GM, ACC >::calcLipschitz( const container& diagonals )
+{
+    InferValue maxDiag = 0.0, maxFirstO = 0.0;
+    InferValue tmpFirstO;
+
+    LabelType label[1];
+
+    for( const_var_iterator diag_end = diagonals.cend(),
+         diag_varIt = diagonals.cbegin();
+         diag_varIt != diag_end; ++diag_varIt
+       ) {
+        std::size_t var_ind = diag_varIt.row_index();
+
+        for( std::size_t nrStates = diag_varIt.row_size(), stateN = 0;
+             stateN < nrStates; ++stateN
+           ) {
+            if( ( *diag_varIt )[ stateN ] > maxDiag ) {
+                maxDiag = ( *diag_varIt )[ stateN ];
+            }
+        }
+
+        for( std::size_t nrFactors = gm_.numberOfFactors( var_ind ),
+                factorN = 0;
+                factorN < nrFactors; ++factorN
+           ) {
+            std::size_t factor_ind = gm_.factorOfVariable( var_ind, factorN );
+            if( gm_.numberOfVariables( factor_ind ) == 1 ) {
+                for( std::size_t nrStates = diag_varIt.row_size(), stateN = 0;
+                        stateN < nrStates; ++stateN 
+                   ) {
+                    label[0] = stateN;
+                    tmpFirstO = std::abs( aFactor( factor_ind, label ) );
+                    if( tmpFirstO > maxFirstO ) {
+                        maxFirstO = tmpFirstO;
+                    }
+                }
+            }
+        }
+    }
+
+    lipschitzConst = 2*maxDiag + maxFirstO;
+}
+
+
+    
 
 /** \brief Base class for wrapper around factor evaluation used by QPDC.
  *
