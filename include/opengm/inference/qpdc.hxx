@@ -132,8 +132,8 @@ private:
     /// calculates conditional expectation of objective for given distribution
     InferValue calcCondExp( IndexType i, LabelType l, const container& probs ) const;
 
-    /// calculates some internally used values to cache them in container associated with out
-    void calcNeighbourMargin( const var_iterator& out, std::size_t varLabel );
+    /// calculates some internally used values 
+    InferValue calcNeighbourMargin( std::size_t varInd, std::size_t varLabel );
     /// calculates the lagrangian for a variable
     InferValue calcLagrange( const const_var_iterator& message, 
         const const_var_iterator& neighbourMargin, const const_var_iterator& diagonal,
@@ -321,7 +321,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     for( var_iterator bNMIt = neighbourMargins.begin(); bNMIt != bNMItEnd; ++ bNMIt ) {
         std::size_t nLabels = bNMIt.row_size();
         for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
-            calcNeighbourMargin( bNMIt, labelN ); 
+            ( *bNMIt )[ labelN ] = calcNeighbourMargin( bNMIt.row_index(), labelN ); 
         }
     }
 
@@ -360,7 +360,8 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
                 /* calculate probabilities for sub-sub-problem */
                 for( std::size_t rowIndex = 0; rowIndex < rowSize; ++rowIndex ) {
                     if( feasibleUpToNow[ rowIndex ] ) {
-                        ( *bPrIt )[ rowIndex ] = ( ( *bMIt )[ rowIndex ] - lagrangian ) / ( *bNMIt )[ rowIndex ];
+                        ( *bPrIt )[ rowIndex ] = ( ( *bMIt )[ rowIndex ] + ( *bDIt )[ rowIndex ] - lagrangian ) / 
+                            ( ( *bNMIt )[ rowIndex ] + 2 * ( *bDIt )[ rowIndex ] );
                         if( ( *bPrIt )[ rowIndex ] < 0 ) {
                             feasibleUpToNow[ rowIndex ] = false;
                             notFeasible = true;
@@ -388,17 +389,17 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
 
 
 template< class GM, class ACC >
-void QpDC< GM, ACC >::calcNeighbourMargin( 
-    const var_iterator& out, std::size_t varLabel 
+typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcNeighbourMargin( 
+    std::size_t varInd, std::size_t varLabel 
 ) {
     bool varIsFirst = false;
-    ( *out )[ varLabel ] = 0;
+    std::size_t labeling[2];
+    InferValue out = 0;
 
-    std::size_t varInd = out.row_index();
     std::size_t nFact = gm_.numberOfFactors( varInd );
 
-    std::size_t labeling[2];
     for( std::size_t factN = 0; factN < nFact; ++factN ) {
+
         std::size_t factInd = gm_.factorOfVariable( varInd, factN );
 
         if( gm_.numberOfVariables( factInd ) == 2 ) {
@@ -418,10 +419,15 @@ void QpDC< GM, ACC >::calcNeighbourMargin(
                 } else {
                     labeling[0] = labelN;
                 }
-                ( *out )[ varLabel ] += aFactor( factInd, labeling );
+                out += aFactor( factInd, labeling );
             }
+        } else {
+            labeling[0] = varLabel;
+            out += aFactor( factInd, labeling );
         }
     }
+
+    return out;
 }
 
 
@@ -438,8 +444,8 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
     std::size_t nLabels = m.row_size();
     for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
         if( f[ labelN ] ) {
-            lagrangian += ( *m )[ labelN ] / ( ( *d )[ labelN ] + ( *nm )[ labelN ] );
-            normalization += 1.0 / ( ( *d )[ labelN ] + ( *nm )[ labelN ] );
+            lagrangian += ( ( *m )[ labelN ] + ( *d )[ labelN ] ) / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
+            normalization += 1.0 / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
         }
     }
 
@@ -504,7 +510,7 @@ void QpDC< GM, ACC >::calcDiagonals( container& diagonals, typeWrap< true > dumm
                     }
                 }         
             }
-            ( *diag_i )[ label_n ] = d;
+            ( *diag_i )[ label_n ] = d / 2;
         }
     }
 }
@@ -705,8 +711,8 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::l1metric
         for( std::size_t nrStates = prob1_varIt.row_size(), stateN = 0;
              stateN < nrStates; ++stateN
            ) {
-            diff += std::abs( ( *prob1_varIt )[ stateN ] - 
-                              ( *prob2_varIt )[ stateN ]
+            diff += std::pow( ( *prob1_varIt )[ stateN ] - 
+                              ( *prob2_varIt )[ stateN ], 2
                     );
         }
     }
@@ -804,6 +810,7 @@ aFactorFunctor_Base< GM, ACC >::aFactorFunctor_Base( const GM& gm ) : gm_( gm ) 
     ValueType min = 0;
     ValueType tmpValue;
     std::size_t nFact = gm.numberOfFactors();
+
     for( std::size_t factN = 0;
          factN < nFact;
          ++factN
@@ -827,10 +834,23 @@ aFactorFunctor_Base< GM, ACC >::aFactorFunctor_Base( const GM& gm ) : gm_( gm ) 
                     }
                 }
             }
+        } else {
+            std::size_t nLabels = gm[ factN ].shape( 0 );
+            for( std::size_t labelN = 0;
+                    labelN < nLabels;
+                    ++labelN
+               ) {
+                labeling[ 0 ] = labelN;
+                tmpValue = sign * gm[ factN ]( labeling );
+                if( tmpValue < min ) {
+                    min = tmpValue;
+                }
+            }
         }
     }
 
-    adjustment_ = min;
+    // make sure factors are strictly positive
+    adjustment_ = min - 0.0001;
 
 }
 
@@ -862,7 +882,7 @@ public:
 
     template< class Iterator >
     ValueType operator() ( const IndexType factorIndex, Iterator labeling ) const {
-        return gm_[ factorIndex ]( labeling ) - adjustment_ + ( gm_.numberOfVariables( factorIndex ) == 2 ) * 0.01; 
+        return gm_[ factorIndex ]( labeling ) - adjustment_; 
     }
 };
 
@@ -880,7 +900,7 @@ public:
 
     template< class Iterator >
     ValueType operator() ( const IndexType factorIndex, Iterator labeling ) const {
-        return (-1) * gm_[ factorIndex ]( labeling ) - adjustment_ + ( gm_.numberOfVariables( factorIndex ) == 2 ) * 0.01;; 
+        return (-1) * gm_[ factorIndex ]( labeling ) - adjustment_; 
     }
 
 };
