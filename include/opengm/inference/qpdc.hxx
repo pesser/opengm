@@ -151,11 +151,8 @@ private:
     /// helper method to call constructor of cache container
     std::vector< std::size_t > ctorHelper( const GraphicalModelType& );
 
-    void setDiagAndLipschitz( container& diagonals, bool convex, bool ct);
     /// used for convergence criterium
-    InferValue l1metric( const container prob1, const container prob2 );
-    /// calculates lipschitz constant
-    void calcLipschitz( const container& diagonals );
+    InferValue l2metric( const container prob1, const container prob2 );
 
     /// const reference to graphical model being used
     const GraphicalModelType& gm_;
@@ -170,9 +167,6 @@ private:
 
     /// parameter instance used
     Parameter parameter_;
-
-    /// lipchitz constant of relaxation
-    InferValue lipschitzConst;
 };
 
 
@@ -316,7 +310,12 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
 
     visitor.begin( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), 0.0 );
 
-    setDiagAndLipschitz( diagonals, parameter_.convex_approximation_, ( parameter_.convergenceThreshold_ > 0 ) );
+    if( parameter_.convex_approximation_ ) {
+        calcDiagonals( diagonals, typeWrap< true >() );
+    } else {
+        calcDiagonals( diagonals, typeWrap< false >() );
+    }
+
 
     for( var_iterator bNMIt = neighbourMargins.begin(); bNMIt != bNMItEnd; ++ bNMIt ) {
         std::size_t nLabels = bNMIt.row_size();
@@ -374,7 +373,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         } /* end for each variable */
 
 
-        progress = l1metric( prob_before, probabilities );
+        progress = l2metric( prob_before, probabilities );
         probabilities.store( prob_before );
 
         visitor( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), progress );
@@ -453,23 +452,6 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange(
     lagrangian /= normalization;
 
     return lagrangian;
-}
-
-template< class GM, class ACC >
-void QpDC< GM, ACC >::setDiagAndLipschitz( container& diagonals, bool convex, bool ct ) {
-    if( convex ) {
-        calcDiagonals( diagonals, typeWrap< true >() );
-
-        if( ct ) {
-            calcLipschitz( diagonals );
-        }
-    } else {
-        if( ct ) {
-            calcDiagonals( diagonals, typeWrap< true >() );
-            calcLipschitz( diagonals );
-        }
-        calcDiagonals( diagonals, typeWrap< false >() );
-    }
 }
 
 
@@ -696,10 +678,10 @@ InferenceTermination QpDC< GM, ACC >::arg
     return NORMAL;
 }
 
-/** calculates the l1metric between two vectors given in containers
+/** calculates the l2metric between two vectors given in containers
  */
 template< class GM, class ACC >
-typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::l1metric
+typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::l2metric
 ( 
     const container prob1, const container prob2 
 ) {
@@ -719,53 +701,6 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::l1metric
 
     return diff;
 }
-
-template<class GM, class ACC >
-void QpDC< GM, ACC >::calcLipschitz( const container& diagonals )
-{
-    InferValue maxDiag = 0.0, maxFirstO = 0.0;
-    InferValue tmpFirstO;
-
-    LabelType label[1];
-
-    for( const_var_iterator diag_end = diagonals.cend(),
-         diag_varIt = diagonals.cbegin();
-         diag_varIt != diag_end; ++diag_varIt
-       ) {
-        std::size_t var_ind = diag_varIt.row_index();
-
-        for( std::size_t nrStates = diag_varIt.row_size(), stateN = 0;
-             stateN < nrStates; ++stateN
-           ) {
-            if( ( *diag_varIt )[ stateN ] > maxDiag ) {
-                maxDiag = ( *diag_varIt )[ stateN ];
-            }
-        }
-
-        for( std::size_t nrFactors = gm_.numberOfFactors( var_ind ),
-                factorN = 0;
-                factorN < nrFactors; ++factorN
-           ) {
-            std::size_t factor_ind = gm_.factorOfVariable( var_ind, factorN );
-            if( gm_.numberOfVariables( factor_ind ) == 1 ) {
-                for( std::size_t nrStates = diag_varIt.row_size(), stateN = 0;
-                        stateN < nrStates; ++stateN 
-                   ) {
-                    label[0] = stateN;
-                    tmpFirstO = std::abs( aFactor( factor_ind, label ) );
-                    if( tmpFirstO > maxFirstO ) {
-                        maxFirstO = tmpFirstO;
-                    }
-                }
-            }
-        }
-    }
-
-    lipschitzConst = 2*maxDiag + maxFirstO;
-}
-
-
-    
 
 /** \brief Base class for wrapper around factor evaluation used by QPDC.
  *
