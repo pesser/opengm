@@ -602,7 +602,7 @@ void QpDC< GM, ACC >::round()  {
         maxConditionalExpectation = calcCondExp( varInd, 0, probabilities );
 
         for( std::size_t labelN = 1; labelN < nLabels; ++labelN ) {
-            tmpConditionalExpectation = calcCondExp( varInd, labelN, prob_tmp );
+            tmpConditionalExpectation = calcCondExp( varInd, labelN, probabilities );
             if( tmpConditionalExpectation >  maxConditionalExpectation ) {
                 labeling[ varInd ] = labelN;
                 maxConditionalExpectation = tmpConditionalExpectation;
