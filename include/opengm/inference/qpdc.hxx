@@ -68,11 +68,13 @@ public:
             const std::size_t maxIterations = 10000,
             const ValueType convergenceThreshold = 0,
             const int init_method = 1,
-            const bool convex_approximation = false
+            const bool convex_approximation = false,
+            const bool close_gap = true
         ) : maxIterations_( maxIterations ),
             convergenceThreshold_( convergenceThreshold ),
             init_method_( init_method ),
-            convex_approximation_( convex_approximation ) {
+            convex_approximation_( convex_approximation ),
+            close_gap_( close_gap ) {
         }
 
         /// maximum number of iterations (default = 10000)
@@ -95,6 +97,9 @@ public:
 
 		/// boolean value of whether to use a convex approximation to the original problem or not
 		bool convex_approximation_;
+
+        /// close gap between expectation and value
+        bool close_gap_;
     };
 
     /// returns the name of the inference algorithm, QpDC
@@ -306,7 +311,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
 ) {
     std::vector< char > feasibleUpToNow;    /* intention of vector< bool > */
 
-    round();
+    //round();
     
     probabilities.store( prob_before );
     ValueType progress = 1000;
@@ -406,8 +411,10 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         ValueType vrel = valueRelaxed();
         ValueType val = this->value();
         ValueType mVal = std::max( std::abs(vrel), std::abs(val) );
-        if( valueRelaxed() - this->value() > mVal * 0.0001 ) {
+        if( parameter_.close_gap_ && ( vrel - val > iterations * mVal * 0.00000001 ) ) {
+            printf("rounding!\n");
             round();
+            printf("new values: value: %f, expectation: %f\n", this->value(), valueRelaxed());
         }
 
     } /* end outer loop */
