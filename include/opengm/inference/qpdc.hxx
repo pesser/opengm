@@ -305,6 +305,8 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     VisitorType& visitor 
 ) {
     std::vector< char > feasibleUpToNow;    /* intention of vector< bool > */
+
+    round();
     
     probabilities.store( prob_before );
     ValueType progress = 1000;
@@ -401,8 +403,12 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
 
         visitor( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), progress );
 
-        /* test */
-        round();
+        ValueType vrel = valueRelaxed();
+        ValueType val = this->value();
+        ValueType mVal = std::max( std::abs(vrel), std::abs(val) );
+        if( valueRelaxed() - this->value() > mVal * 0.0001 ) {
+            round();
+        }
 
     } /* end outer loop */
 
