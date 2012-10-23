@@ -158,7 +158,7 @@ private:
     const GraphicalModelType& gm_;
 
     // caches
-    container neighbourMargins, messages, probabilities, diagonals;
+    container neighbourMargins, gradv, probabilities, diagonals;
     container prob_before;
     mutable container prob_tmp;
 
@@ -179,7 +179,7 @@ QpDC< GM, ACC >::QpDC(
     const GM& gm, const Parameter& parameter 
 ) : gm_( gm ), parameter_( parameter ), 
     neighbourMargins( ctorHelper( gm ) ),
-    messages( ctorHelper( gm ) ),
+    gradv( ctorHelper( gm ) ),
     probabilities( ctorHelper( gm ) ),
     diagonals( ctorHelper( gm ) ),
     prob_before( ctorHelper( gm ) ),
@@ -301,8 +301,6 @@ template< class VisitorType >
 InferenceTermination QpDC<GM, ACC>::inferRelaxed( 
     VisitorType& visitor 
 ) {
-    var_iterator bNMItEnd = neighbourMargins.end();
-    var_iterator bMItEnd = messages.end();
     std::vector< char > feasibleUpToNow;    /* intention of vector< bool > */
     
     probabilities.store( prob_before );
@@ -317,56 +315,70 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     }
 
 
-    for( var_iterator bNMIt = neighbourMargins.begin(); bNMIt != bNMItEnd; ++ bNMIt ) {
-        std::size_t nLabels = bNMIt.row_size();
-        for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
-            ( *bNMIt )[ labelN ] = calcNeighbourMargin( bNMIt.row_index(), labelN ); 
+    for( var_iterator nm_varEnd = neighbourMargins.end(), nm_varIt = neighbourMargins.begin();
+            nm_varIt != nm_varEnd;
+            ++nm_varIt
+       ) {
+        for( std::size_t nrLabels = nm_varIt.row_size(), labelN = 0; 
+                labelN < nrLabels; 
+                ++labelN 
+           ) {
+            ( *nm_varIt )[ labelN ] = calcNeighbourMargin( nm_varIt.row_index(), labelN ); 
         }
     }
 
     for( std::size_t iterations = 0; 
-         iterations < std::size_t( parameter_.maxIterations_ ) && parameter_.convergenceThreshold_ < progress; ++iterations ) {
+            iterations < std::size_t( parameter_.maxIterations_ ) && parameter_.convergenceThreshold_ < progress; 
+            ++iterations 
+       ) {
+        // calculate gradient of v
+        for( var_iterator gradv_varEnd = gradv.end(), gradv_varIt = gradv.begin(),
+                prob_varIt = probabilities.begin(), nm_varIt = neighbourMargins.begin(); 
+                gradv_varIt != gradv_varEnd; 
+                ++gradv_varIt, ++prob_varIt, ++nm_varIt 
+           ) {
+            std::size_t varInd = gradv_varIt.row_index();
 
-        // set up messages
-        for( var_iterator bMIt = messages.begin(),
-                  bPrIt = probabilities.begin(),
-                  bNMIt = neighbourMargins.begin(); bMIt != bMItEnd; ++bMIt, ++bPrIt, ++bNMIt ) {
-            std::size_t varInd = bMIt.row_index();
-            std::size_t nLabels = bMIt.row_size();
-            for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
-                ( *bMIt )[ labelN ] = ( ( *bPrIt )[ labelN ] * ( *bNMIt )[ labelN ] ) + calcCondExp( varInd, labelN );
+            for( std::size_t nrLabels = gradv_varIt.row_size(), labelN = 0; 
+                    labelN < nrLabels; 
+                    ++labelN 
+               ) {
+                ( *gradv_varIt )[ labelN ] = ( ( *prob_varIt )[ labelN ] * ( *nm_varIt )[ labelN ] + 
+                                                calcCondExp( varInd, labelN )
+                                             );
             }
         }
 
         // solve kkt greedy
-        for( var_iterator bPrIt = probabilities.begin(), 
-                  bMIt = messages.begin(),
-                  bNMIt = neighbourMargins.begin(),
-                  bDIt = diagonals.begin();
-             bMIt != bMItEnd; 
-             ++bPrIt, ++bMIt, ++bNMIt, ++bDIt ) {
-            bool notFeasible = true;
-            feasibleUpToNow.assign( bPrIt.row_size(), true );
+        for( var_iterator prob_varEnd = probabilities.end(), 
+                prob_varIt = probabilities.begin(), 
+                gradv_varIt = gradv.begin(),
+                nm_varIt = neighbourMargins.begin(),
+                diag_varIt = diagonals.begin();
+                prob_varIt != prob_varEnd; 
+                ++prob_varIt, ++gradv_varIt, ++nm_varIt, ++diag_varIt 
+           ) {
 
-            std::size_t rowSize = bPrIt.row_size(); 
-            for( std::size_t innerIt = 0; 
-                 notFeasible; 
-                 ++innerIt ) { 
+            bool notFeasible = true;
+            feasibleUpToNow.assign( prob_varIt.row_size(), true );
+
+            std::size_t nrLabels = prob_varIt.row_size(); 
+            while( notFeasible ) {
                 notFeasible = false;
 
-                InferValue lagrangian = calcLagrange( bMIt, bNMIt, bDIt, feasibleUpToNow );
+                InferValue lagrangian = calcLagrange( gradv_varIt, nm_varIt, diag_varIt, feasibleUpToNow );
 
                 /* calculate probabilities for sub-sub-problem */
-                for( std::size_t rowIndex = 0; rowIndex < rowSize; ++rowIndex ) {
-                    if( feasibleUpToNow[ rowIndex ] ) {
-                        ( *bPrIt )[ rowIndex ] = ( ( *bMIt )[ rowIndex ] + ( *bDIt )[ rowIndex ] - lagrangian ) / 
-                            ( ( *bNMIt )[ rowIndex ] + 2 * ( *bDIt )[ rowIndex ] );
-                        if( ( *bPrIt )[ rowIndex ] < 0 ) {
-                            feasibleUpToNow[ rowIndex ] = false;
+                for( std::size_t labelN = 0; labelN < nrLabels; ++labelN ) {
+                    if( feasibleUpToNow[ labelN ] ) {
+                        ( *prob_varIt )[ labelN ] = ( ( *gradv_varIt )[ labelN ] + ( *diag_varIt )[ labelN ] - lagrangian ) / 
+                            ( ( *nm_varIt )[ labelN ] + 2 * ( *diag_varIt )[ labelN ] );
+                        if( ( *prob_varIt )[ labelN ] < 0 ) {
+                            feasibleUpToNow[ labelN ] = false;
                             notFeasible = true;
                         }
                     } else {
-                        ( *bPrIt )[ rowIndex ] = 0;
+                        ( *prob_varIt )[ labelN ] = 0;
                     }
                 } /* end for each label */
             } /* end inner loop */
@@ -516,6 +528,7 @@ void QpDC< GM, ACC >::calcDiagonals( container& diagonals, typeWrap< false > dum
 template< class GM, class ACC >
 void QpDC< GM, ACC >::decodeToIntegral( std::vector< LabelType >& labeling ) const {
 
+    // copy currently cached probabilities to prob_tmp
     probabilities.store( prob_tmp );
 
     InferValue maxConditionalExpectation, tmpConditionalExpectation;
