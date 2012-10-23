@@ -69,12 +69,14 @@ public:
             const ValueType convergenceThreshold = 0,
             const int init_method = 1,
             const bool convex_approximation = false,
-            const bool close_gap = true
+            const bool close_gap = false,
+            const bool round_to_convergence = false
         ) : maxIterations_( maxIterations ),
             convergenceThreshold_( convergenceThreshold ),
             init_method_( init_method ),
             convex_approximation_( convex_approximation ),
-            close_gap_( close_gap ) {
+            close_gap_( close_gap ),
+            round_to_convergence_( round_to_convergence ) {
         }
 
         /// maximum number of iterations (default = 10000)
@@ -100,6 +102,9 @@ public:
 
         /// close gap between expectation and value
         bool close_gap_;
+
+        /// round solution until convergence before starting qpdc
+        bool round_to_convergence_;
     };
 
     /// returns the name of the inference algorithm, QpDC
@@ -310,11 +315,19 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     VisitorType& visitor 
 ) {
     std::vector< char > feasibleUpToNow;    /* intention of vector< bool > */
+    ValueType progress = 1;
 
-    //round();
+    for( std::size_t iterations = 1; 
+            parameter_.round_to_convergence_ && ( progress > iterations*0.000001 ); 
+            ++iterations 
+       ) {
+        ValueType before = this->value();
+        round();
+        progress = ( before - this->value() ) / ( std::abs( before ) + 0.0000001 );
+    }
     
     probabilities.store( prob_before );
-    ValueType progress = 1000;
+    progress = 1000;
 
     visitor.begin( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), 0.0 );
 

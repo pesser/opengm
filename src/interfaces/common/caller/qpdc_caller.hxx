@@ -42,6 +42,7 @@ inline QPDCCaller<IO, GM, ACC>::QPDCCaller(IO& ioIn)
 									"method to choose starting point( 0 = all label 0, 1 = uniform, x = seed for random point )" ) );
     addArgument( BoolArgument(      qpdcParameter_.convex_approximation_, "ca", "convex_approximation", "use a convex approximation to the problem" ) );
     addArgument( BoolArgument(      qpdcParameter_.close_gap_, "cg", "close_gap", "close gap between expectation and integer solution" ) );
+    addArgument( BoolArgument(      qpdcParameter_.round_to_convergence_, "rc", "round_to_convergence", "round until convergence before starting" ) );
 }
 
 template <class IO, class GM, class ACC>
