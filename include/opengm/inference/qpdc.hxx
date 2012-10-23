@@ -135,8 +135,8 @@ private:
     /// calculates some internally used values 
     InferValue calcNeighbourMargin( std::size_t varInd, std::size_t varLabel );
     /// calculates the lagrangian for a variable
-    InferValue calcLagrange( const const_var_iterator& message, 
-        const const_var_iterator& neighbourMargin, const const_var_iterator& diagonal,
+    InferValue calcLagrange( const const_var_iterator& gradv, 
+        const const_var_iterator& neighbourMargin, 
         const std::vector< char >& feasible );
 
     template< bool V > class typeWrap { };
@@ -315,15 +315,19 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     }
 
 
-    for( var_iterator nm_varEnd = neighbourMargins.end(), nm_varIt = neighbourMargins.begin();
+    for( var_iterator nm_varEnd = neighbourMargins.end(), 
+            nm_varIt = neighbourMargins.begin(),
+            diag_varIt = diagonals.begin();
             nm_varIt != nm_varEnd;
-            ++nm_varIt
+            ++nm_varIt, ++diag_varIt
        ) {
+        std::size_t varInd = nm_varIt.row_index();
+
         for( std::size_t nrLabels = nm_varIt.row_size(), labelN = 0; 
                 labelN < nrLabels; 
                 ++labelN 
            ) {
-            ( *nm_varIt )[ labelN ] = calcNeighbourMargin( nm_varIt.row_index(), labelN ); 
+            ( *nm_varIt )[ labelN ] = calcNeighbourMargin( varInd, labelN ) + 2 * ( *diag )[ labelN ]; 
         }
     }
 
@@ -332,10 +336,13 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
             ++iterations 
        ) {
         // calculate gradient of v
-        for( var_iterator gradv_varEnd = gradv.end(), gradv_varIt = gradv.begin(),
-                prob_varIt = probabilities.begin(), nm_varIt = neighbourMargins.begin(); 
-                gradv_varIt != gradv_varEnd; 
-                ++gradv_varIt, ++prob_varIt, ++nm_varIt 
+        for( var_iterator prob_varEnd = probabilities.end(),
+                prob_varIt = probabilities.begin(),
+                gradv_varIt = gradv.begin(),
+                nm_varIt = neighbourMargins.begin(),
+                diag_varIt = diagonals.begin();
+                prob_varIt != prob_varEnd;
+                ++prob_varIt, ++gradv_varIt, ++nm_varIt, ++diag_varIt
            ) {
             std::size_t varInd = gradv_varIt.row_index();
 
@@ -343,8 +350,10 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
                     labelN < nrLabels; 
                     ++labelN 
                ) {
-                ( *gradv_varIt )[ labelN ] = ( ( *prob_varIt )[ labelN ] * ( *nm_varIt )[ labelN ] + 
-                                                calcCondExp( varInd, labelN )
+                ( *gradv_varIt )[ labelN ] = (  ( *prob_varIt )[ labelN ] * ( *nm_varIt )[ labelN ] + 
+                                                calcCondExp( varInd, labelN ) + 
+                                                ( *diag_varIt )[ labelN ] -
+                                                2 * ( *prob_varIt )[ labelN ] * ( *diag_varIt )[ labelN ]
                                              );
             }
         }
@@ -353,10 +362,9 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         for( var_iterator prob_varEnd = probabilities.end(), 
                 prob_varIt = probabilities.begin(), 
                 gradv_varIt = gradv.begin(),
-                nm_varIt = neighbourMargins.begin(),
-                diag_varIt = diagonals.begin();
+                nm_varIt = neighbourMargins.begin();
                 prob_varIt != prob_varEnd; 
-                ++prob_varIt, ++gradv_varIt, ++nm_varIt, ++diag_varIt 
+                ++prob_varIt, ++gradv_varIt, ++nm_varIt 
            ) {
 
             bool notFeasible = true;
@@ -366,13 +374,13 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
             while( notFeasible ) {
                 notFeasible = false;
 
-                InferValue lagrangian = calcLagrange( gradv_varIt, nm_varIt, diag_varIt, feasibleUpToNow );
+                InferValue lagrangian = calcLagrange( gradv_varIt, nm_varIt, feasibleUpToNow );
 
                 /* calculate probabilities for sub-sub-problem */
                 for( std::size_t labelN = 0; labelN < nrLabels; ++labelN ) {
                     if( feasibleUpToNow[ labelN ] ) {
-                        ( *prob_varIt )[ labelN ] = ( ( *gradv_varIt )[ labelN ] + ( *diag_varIt )[ labelN ] - lagrangian ) / 
-                            ( ( *nm_varIt )[ labelN ] + 2 * ( *diag_varIt )[ labelN ] );
+                        ( *prob_varIt )[ labelN ] = ( ( *gradv_varIt )[ labelN ] - lagrangian ) / 
+                            ( ( *nm_varIt )[ labelN ] );
                         if( ( *prob_varIt )[ labelN ] < 0 ) {
                             feasibleUpToNow[ labelN ] = false;
                             notFeasible = true;
@@ -444,19 +452,18 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcNeighbourMargin(
 
 template< class GM, class ACC >
 typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcLagrange( 
-    const const_var_iterator& m, 
+    const const_var_iterator& gv, 
     const const_var_iterator& nm, 
-    const const_var_iterator& d,
     const std::vector< char >& f 
 ) {
     InferValue lagrangian = 0;
     InferValue normalization = 0;
 
-    std::size_t nLabels = m.row_size();
+    std::size_t nLabels = gv.row_size();
     for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
         if( f[ labelN ] ) {
-            lagrangian += ( ( *m )[ labelN ] + ( *d )[ labelN ] ) / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
-            normalization += 1.0 / ( 2 * ( *d )[ labelN ] + ( *nm )[ labelN ] );
+            lagrangian += ( *gv )[ labelN ] / ( *nm )[ labelN ];
+            normalization += 1.0 / ( *nm )[ labelN ];
         }
     }
 
