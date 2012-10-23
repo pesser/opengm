@@ -127,6 +127,9 @@ private:
     /// decodes cached probabilities to integer assignment
     void decodeToIntegral( std::vector< LabelType >& labeling ) const;
 
+    /// non const rounding
+    void round();
+
     /// calculates conditional expectation of objective for currently cached distribution
     InferValue calcCondExp( IndexType i, LabelType l ) const;
     /// calculates conditional expectation of objective for given distribution
@@ -398,6 +401,8 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
 
         visitor( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), progress );
 
+        /* test */
+        round();
 
     } /* end outer loop */
 
@@ -566,6 +571,40 @@ void QpDC< GM, ACC >::decodeToIntegral( std::vector< LabelType >& labeling ) con
     }
 }
 
+/** non-const version of decodeToIntegral - sets cached probabilities
+ *  to integer solution
+ */
+template< class GM, class ACC >
+void QpDC< GM, ACC >::round()  {
+    std::vector< LabelType > labeling( gm_.numberOfVariables() ); 
+
+    InferValue maxConditionalExpectation, tmpConditionalExpectation;
+    
+    for( var_iterator bPrItEnd = probabilities.end(), bPrIt = probabilities.begin(); 
+         bPrIt != bPrItEnd; ++bPrIt 
+    ) {
+        std::size_t nLabels = bPrIt.row_size();
+        std::size_t varInd = bPrIt.row_index();
+        labeling[ varInd ] = 0;
+        maxConditionalExpectation = calcCondExp( varInd, 0, probabilities );
+
+        for( std::size_t labelN = 1; labelN < nLabels; ++labelN ) {
+            tmpConditionalExpectation = calcCondExp( varInd, labelN, prob_tmp );
+            if( tmpConditionalExpectation >  maxConditionalExpectation ) {
+                labeling[ varInd ] = labelN;
+                maxConditionalExpectation = tmpConditionalExpectation;
+            }
+         }
+        // adapt probabilities to fit assignment 
+        for( std::size_t labelN = 0; labelN < nLabels; ++labelN ) {
+            if( labelN == labeling[ varInd ] ) {
+                ( *bPrIt )[ labelN ] = 1;
+            } else {
+                ( *bPrIt )[ labelN ] = 0;
+            }
+        }
+    }
+}
 
 /** calls calcCondExp with currently cached probabilities
  */
