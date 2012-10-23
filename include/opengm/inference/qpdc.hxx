@@ -327,7 +327,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
                 labelN < nrLabels; 
                 ++labelN 
            ) {
-            ( *nm_varIt )[ labelN ] = calcNeighbourMargin( varInd, labelN ) + 2 * ( *diag )[ labelN ]; 
+            ( *nm_varIt )[ labelN ] = calcNeighbourMargin( varInd, labelN ) + 2 * ( *diag_varIt )[ labelN ]; 
         }
     }
 
