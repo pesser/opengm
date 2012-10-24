@@ -329,14 +329,13 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     probabilities.store( prob_before );
     progress = 1000;
 
-    visitor.begin( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), 0.0 );
-
     if( parameter_.convex_approximation_ ) {
         calcDiagonals( diagonals, typeWrap< true >() );
     } else {
         calcDiagonals( diagonals, typeWrap< false >() );
     }
 
+    visitor.begin( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), 0.0 );
 
     for( var_iterator nm_varEnd = neighbourMargins.end(), 
             nm_varIt = neighbourMargins.begin(),
@@ -740,6 +739,25 @@ typename GM::ValueType QpDC< GM, ACC >::valueRelaxed( ) const {
             }
         }
     }
+
+    /* //uncomment to model the actual objective that gets optimized by the convex approximation
+    for( const_var_iterator prob_varEnd = probabilities.cend(),
+            prob_varIt = probabilities.cbegin(),
+            diag_varIt = diagonals.cbegin();
+            prob_varIt != prob_varEnd;
+            ++prob_varIt, ++diag_varIt
+       ) {
+        for( std::size_t nrLabels = prob_varIt.row_size(),
+                labelN = 0;
+                labelN < nrLabels;
+                ++labelN
+           ) {
+            value += ( ( *diag_varIt )[ labelN ] * 
+                ( std::pow( ( *prob_varIt )[ labelN ], 2 ) - ( *prob_varIt )[ labelN ] )
+                );
+        }
+    }
+    */
 
     return value;
 }
