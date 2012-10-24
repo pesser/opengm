@@ -318,12 +318,12 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     ValueType progress = 1;
 
     for( std::size_t iterations = 1; 
-            parameter_.round_to_convergence_ && ( progress > iterations*0.000001 ); 
+            parameter_.round_to_convergence_ && ( progress > iterations * 1e-12 ); 
             ++iterations 
        ) {
         ValueType before = this->value();
         round();
-        progress = ( before - this->value() ) / ( std::abs( before ) + 0.0000001 );
+        progress = ( before - this->value() ) / ( std::abs( before ) + 1e-12 );
     }
     
     probabilities.store( prob_before );
@@ -423,7 +423,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         ValueType vrel = valueRelaxed();
         ValueType val = this->value();
         ValueType mVal = std::max( std::abs(vrel), std::abs(val) );
-        if( parameter_.close_gap_ && ( vrel - val > iterations * mVal * 0.00000001 ) ) {
+        if( parameter_.close_gap_ && ( vrel - val > iterations * mVal * 1e-20 ) && mVal > 0 ) {
             printf("rounding!\n");
             round();
             printf("new values: value: %f, expectation: %f\n", this->value(), valueRelaxed());
