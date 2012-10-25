@@ -36,7 +36,6 @@ class aFactorFunctor;
 template< class GM, class ACC >
 class QpDC : public Inference< GM, ACC > {
 public:
-    /// chooses suitable type for inference
     typedef typename
     GM::ValueType InferValue;
 
@@ -66,26 +65,25 @@ public:
         /// constructor with default values
         Parameter(
             const std::size_t maxIterations = 10000,
-            const ValueType convergenceThreshold = 0,
+            const ValueType convergenceThreshold = 1e-20,
             const int init_method = 1,
             const bool convex_approximation = false,
             const bool close_gap = false,
-            const bool round_to_convergence = false
+            const bool round_to_convergence = false,
+            const std::size_t max_roundings = 0
         ) : maxIterations_( maxIterations ),
             convergenceThreshold_( convergenceThreshold ),
             init_method_( init_method ),
             convex_approximation_( convex_approximation ),
             close_gap_( close_gap ),
-            round_to_convergence_( round_to_convergence ) {
+            round_to_convergence_( round_to_convergence ),
+            max_roundings_( max_roundings ) {
         }
 
         /// maximum number of iterations (default = 10000)
         std::size_t maxIterations_;
 
-        /// for values greater than zero, the algorithm will stop if the progress is below this value (default = 0)
-        ///
-        /// if greater than zero, the progress has to be calculated at each iteration which can 
-        /// decrease the performance
+        /// stop if the progress is below this value (default = 1e-20)
         ValueType convergenceThreshold_;
 
         /// method used for initialization of starting point (default = 1)
@@ -94,17 +92,24 @@ public:
         ///
         /// 1 - for each variable, assume a uniform distribution acrosss the labels
         ///
-        /// all other integer values will be treated as a seed for random assignment of probabilities
+        /// all other positive integer values will be treated as a seed for random assignment of probabilities
+        ///
+        /// all other negative integer values will be treated as a seed for random assignment of an integer solution
         int init_method_;
 
-		/// boolean value of whether to use a convex approximation to the original problem or not
+		/// use convex approximation to the original problem if true (default = false)
 		bool convex_approximation_;
 
-        /// close gap between expectation and value
+        /// close gap between expectation and value (default = false)
         bool close_gap_;
 
-        /// round solution until convergence before starting qpdc
+        /// round solution until convergence before starting qpdc (default = false)
         bool round_to_convergence_;
+
+        /// maximum number of roundings before start (0 to deactivate). (default = 0)
+        ///
+        /// Only has an effect with round_to_convergence = true 
+        std::size_t max_roundings_;
     };
 
     /// returns the name of the inference algorithm, QpDC
@@ -127,7 +132,7 @@ public:
     InferenceTermination arg( std::vector< LabelType >& labeling, const std::size_t N = 1 ) const;
 
 private:
-    /// returns value of quadratic program relaxation
+    /// returns value of quadratic program relaxation, i.e. the expectation
     ValueType valueRelaxed( ) const; 
 
     /// main implementation of the algorithm
@@ -137,12 +142,12 @@ private:
     /// decodes cached probabilities to integer assignment
     void decodeToIntegral( std::vector< LabelType >& labeling ) const;
 
-    /// non const rounding
+    /// non const rounding; same as decodeToIntegral but sets cached probabilities to integer solution
     void round();
 
-    /// calculates conditional expectation of objective for currently cached distribution
+    /// calculates something like the conditional expectation of objective for currently cached distribution
     InferValue calcCondExp( IndexType i, LabelType l ) const;
-    /// calculates conditional expectation of objective for given distribution
+    /// calculates something like the conditional expectation of objective for given distribution
     InferValue calcCondExp( IndexType i, LabelType l, const container& probs ) const;
 
     /// calculates some internally used values 
@@ -154,7 +159,7 @@ private:
 
     template< bool V > class typeWrap { };
 
-    /// calculates the diagonal entries needed to make the factor matrix positive definite
+    /// calculates the diagonal entries needed to make the factor matrix definite
     void calcDiagonals( container& diagonals, typeWrap< true > dummy );
     /// makes sure to set diagonal entries to zero if convex approximation is deactivated
     void calcDiagonals( container& diagonals, typeWrap< false > dummy );
@@ -233,29 +238,61 @@ void QpDC< GM, ACC >::initProbabilities(
             break;
         default:        /* assign random probabilities */
             std::srand( std::abs( method ) );
-            std::vector< InferValue > interval_points;
 
-            for( var_iterator pr_it = probabilities.begin(), pr_end = probabilities.end();
-                 pr_it != pr_end; ++pr_it
-            ) {
-                interval_points.clear();
-                interval_points.push_back( 0.0 );
-                interval_points.push_back( 1.0 );
-                std::size_t nr_labels = pr_it.row_size();
-                for( std::size_t label_n = 0;
-                     label_n < ( nr_labels - 1 ); ++label_n
+            if( method >= 0 ) { // assign fractal solution
+                std::vector< InferValue > interval_points;
+
+                for( var_iterator pr_it = probabilities.begin(), pr_end = probabilities.end();
+                     pr_it != pr_end; ++pr_it
                 ) {
-                    interval_points.push_back( InferValue( std::rand() ) / RAND_MAX );
+                    interval_points.clear();
+                    interval_points.push_back( 0.0 );
+                    interval_points.push_back( 1.0 );
+                    std::size_t nr_labels = pr_it.row_size();
+                    for( std::size_t label_n = 0;
+                         label_n < ( nr_labels - 1 ); ++label_n
+                    ) {
+                        interval_points.push_back( InferValue( std::rand() ) / RAND_MAX );
+                    }
+
+                    std::sort( interval_points.begin(), interval_points.end() );
+                    nr_labels = pr_it.row_size();
+                    for( std::size_t label_n = 0;
+                         label_n < nr_labels; ++label_n
+                    ) {
+                        ( *pr_it )[ label_n ] = interval_points[ label_n + 1 ] - interval_points[ label_n ];
+                    }
                 }
+            } else {    // assign integer solution
 
-                std::sort( interval_points.begin(), interval_points.end() );
-                nr_labels = pr_it.row_size();
-                for( std::size_t label_n = 0;
-                     label_n < nr_labels; ++label_n
-                ) {
-                    ( *pr_it )[ label_n ] = interval_points[ label_n + 1 ] - interval_points[ label_n ];
+                for( var_iterator pr_it = probabilities.begin(), 
+                        pr_end = probabilities.end();
+                        pr_it != pr_end;
+                        ++pr_it
+                   ) {
+                    std::size_t nr_labels = pr_it.row_size();
+                    ValueType rnd = ValueType( std::rand() ) / RAND_MAX;
+                    bool found = false;
+
+                    for( std::size_t labelN = 0;
+                            labelN < nr_labels;
+                            ++labelN
+                       ) {
+                        if( found ) {
+                            ( *pr_it )[ labelN ] = 0.0;
+                        } else {
+                            if( rnd <= ( labelN + 1 )/nr_labels ) {
+                                ( *pr_it )[ labelN ] = 1.0;
+                                found = true;
+                            } else {
+                                ( *pr_it )[ labelN ] = 0.0;
+                            }
+                        }
+                    }
                 }
             }
+
+
             break;
     }
 }
@@ -308,7 +345,8 @@ InferenceTermination QpDC< GM, ACC >::infer(
     return inferRelaxed( visitor );
 }
 
-
+/** main algorithm
+ */
 template< class GM, class ACC >
 template< class VisitorType >
 InferenceTermination QpDC<GM, ACC>::inferRelaxed( 
@@ -317,6 +355,8 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     std::vector< char > feasibleUpToNow;    /* intention of vector< bool > */
     ValueType progress = 1;
 
+    visitor.begin( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), 0.0 );
+
     for( std::size_t iterations = 1; 
             parameter_.round_to_convergence_ && ( progress > iterations * 1e-12 ); 
             ++iterations 
@@ -324,6 +364,10 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
         ValueType before = this->value();
         round();
         progress = ( before - this->value() ) / ( std::abs( before ) + 1e-12 );
+
+        if( parameter_.max_roundings_ > 0 && iterations > parameter_.max_roundings_ ) {
+            parameter_.round_to_convergence_ = false;
+        }
     }
     
     probabilities.store( prob_before );
@@ -334,8 +378,6 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     } else {
         calcDiagonals( diagonals, typeWrap< false >() );
     }
-
-    visitor.begin( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), 0.0 );
 
     for( var_iterator nm_varEnd = neighbourMargins.end(), 
             nm_varIt = neighbourMargins.begin(),
@@ -420,13 +462,13 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
 
         visitor( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), progress );
 
-        ValueType vrel = valueRelaxed();
-        ValueType val = this->value();
-        ValueType mVal = std::max( std::abs(vrel), std::abs(val) );
-        if( parameter_.close_gap_ && ( vrel - val > iterations * mVal * 1e-20 ) && mVal > 0 ) {
-            printf("rounding!\n");
-            round();
-            printf("new values: value: %f, expectation: %f\n", this->value(), valueRelaxed());
+        if( parameter_.close_gap_ ) {
+            ValueType vrel = valueRelaxed();
+            ValueType val = this->value();
+            ValueType mVal = std::max( std::abs(vrel), std::abs(val) );
+            if( ( vrel - val > iterations * mVal * 1e-20 ) && mVal > 0 ) {
+                round();
+            }
         }
 
     } /* end outer loop */
@@ -642,7 +684,8 @@ typename QpDC< GM, ACC >::InferValue QpDC< GM, ACC >::calcCondExp
     return calcCondExp( varInd, l, probabilities );
 }
     
-/** calculates the expected value of the function modelled by the graphical model
+/** calculates something related to the expected value of the function 
+ *  modelled by the graphical model
  *  given that variable i takes on label l and all the other variables are 
  *  are distributed according to the given distribution
  *  \param varInd index of variable to condition on

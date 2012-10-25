@@ -35,14 +35,15 @@ public:
 template <class IO, class GM, class ACC>
 inline QPDCCaller<IO, GM, ACC>::QPDCCaller(IO& ioIn)
    : InferenceCallerBase<IO, GM, ACC>(name_, description, ioIn) {
-	addArgument( Size_TArgument< >( qpdcParameter_.maxIterations_, "mi", "maximum_iterations", "maximum number of iterations" ) );
+	addArgument( Size_TArgument< >( qpdcParameter_.maxIterations_, "mi", "maximum_iterations", "maximum number of iterations", size_t(10000) ) );
 	addArgument( DoubleArgument< >( qpdcParameter_.convergenceThreshold_, "ct", "convergence_threshold",
-									"stop inference if progress is below convergence threshold (expect a decrease in performance!)" ) );
+                "stop inference if progress is below convergence threshold", 1e-20 ) );
 	addArgument( IntArgument< >(    qpdcParameter_.init_method_, "in", "init_method", 
-									"method to choose starting point( 0 = all label 0, 1 = uniform, x = seed for random point )" ) );
+                "method to choose starting point( 0 = all label 0, 1 = uniform, x > 0 = seed for random point, x < 0 = seed for random integer point )", int(1) ) );
     addArgument( BoolArgument(      qpdcParameter_.convex_approximation_, "ca", "convex_approximation", "use a convex approximation to the problem" ) );
     addArgument( BoolArgument(      qpdcParameter_.close_gap_, "cg", "close_gap", "close gap between expectation and integer solution" ) );
     addArgument( BoolArgument(      qpdcParameter_.round_to_convergence_, "rc", "round_to_convergence", "round until convergence before starting" ) );
+	addArgument( Size_TArgument< >( qpdcParameter_.max_roundings_, "mr", "max_roundings", "maximum number of roundings before start (0 to deactivate)", size_t(0) ) );
 }
 
 template <class IO, class GM, class ACC>
