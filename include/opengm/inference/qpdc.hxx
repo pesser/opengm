@@ -358,12 +358,12 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
     visitor.begin( *this, std::string( "expectation" ), valueRelaxed(),  std::string( "progress" ), 0.0 );
 
     for( std::size_t iterations = 1; 
-            parameter_.round_to_convergence_ && ( progress > iterations * 1e-12 ); 
+            parameter_.round_to_convergence_ && ( progress > 1e-12 ); 
             ++iterations 
        ) {
         ValueType before = this->value();
         round();
-        progress = ( before - this->value() ) / ( std::abs( before ) + 1e-12 );
+        progress = ( before - this->value() ) / ( std::abs( before ) + 1 );
 
         if( parameter_.max_roundings_ > 0 && iterations > parameter_.max_roundings_ ) {
             parameter_.round_to_convergence_ = false;
@@ -466,7 +466,7 @@ InferenceTermination QpDC<GM, ACC>::inferRelaxed(
             ValueType vrel = valueRelaxed();
             ValueType val = this->value();
             ValueType mVal = std::max( std::abs(vrel), std::abs(val) );
-            if( ( vrel - val > iterations * mVal * 1e-20 ) && mVal > 0 ) {
+            if( ( vrel - val > mVal * 1e-20 ) && mVal > 0 ) {
                 round();
             }
         }
