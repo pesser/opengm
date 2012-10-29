@@ -377,7 +377,12 @@ AccessorIterator<A, isConst>::operator-
    const AccessorIterator<A, isConstLocal>& it
 ) const
 {
+   //gcc 4.6 bugfix
+   #if __GNUC__ == 4 && __GNUC_MINOR__ >= 6
    typedef std::ptrdiff_t difference_type;
+   #else
+   typedef ptrdiff_t difference_type;
+   #endif
    OPENGM_ASSERT(this->accessor_ == it.accessor_);
    return static_cast<difference_type>(index_) - static_cast<difference_type>(it.index_);
 }
