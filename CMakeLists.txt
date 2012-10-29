@@ -46,14 +46,6 @@ OPTION(WITH_CONVERTER "Build Converter OpenGm1->OpenGm2, requires Boost 1.47!" O
 OPTION(BUILD_PYTHON_WRAPPER "build python wrapper" OFF)
 
 #--------------------------------------------------------------
-# set default build type to release 
-#--------------------------------------------------------------
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING 
-        "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE)
-endif()
-
-#--------------------------------------------------------------
 # Cplex
 #--------------------------------------------------------------
 if(WITH_CPLEX)
