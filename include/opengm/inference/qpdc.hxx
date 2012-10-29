@@ -21,15 +21,11 @@ class aFactorFunctor;
 /** \brief Algorithm for minimization/maximization of 
  *         additive second order models.
  *
- *  Implementation of [1] by Patrick Esser. Based on a 
- *  relaxation of the original problem to a quadratic program,
+ *  Implementation of [1] by Patrick Esser, supervised by 
+ *  Joerg Kappes. Based on a relaxation
+ *  of the original problem to a quadratic program,
  *  which in turn again gets represented as the difference of
  *  convex functions for optimization.
- *  The relaxed problem is guaranteed to decrease (resp. increase)
- *  monotonically and converges to a local optimum, while the 
- *  value of the recovered integral assignment is guaranteed to
- *  be less (resp. greater) than or equal to the value of the 
- *  relaxed problem.
  *  
  *  [1] Kumar, A., Zilberstein, S. (2011). Message-Passing Algorithms for Quadratic Programming Formulations of MAP Estimation.
  */
