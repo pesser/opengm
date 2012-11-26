@@ -44,6 +44,8 @@ inline QPDCCaller<IO, GM, ACC>::QPDCCaller(IO& ioIn)
     addArgument( BoolArgument(      qpdcParameter_.close_gap_, "cg", "close_gap", "close gap between expectation and integer solution" ) );
     addArgument( BoolArgument(      qpdcParameter_.round_to_convergence_, "rc", "round_to_convergence", "round until convergence before starting" ) );
 	addArgument( Size_TArgument< >( qpdcParameter_.max_roundings_, "mr", "max_roundings", "maximum number of roundings before start (0 to deactivate)", size_t(0) ) );
+    addArgument( VectorArgument<std::vector<typename QPDC::LabelType> >( 
+                                    qpdcParameter_.start_state_, "x0", "startingpoint", "location of the file containing the values for the starting point", false));
 }
 
 template <class IO, class GM, class ACC>

@@ -66,14 +66,16 @@ public:
             const bool convex_approximation = false,
             const bool close_gap = false,
             const bool round_to_convergence = false,
-            const std::size_t max_roundings = 0
+            const std::size_t max_roundings = 0,
+            const std::vector< LabelType > start_state = std::vector< LabelType >()
         ) : maxIterations_( maxIterations ),
             convergenceThreshold_( convergenceThreshold ),
             init_method_( init_method ),
             convex_approximation_( convex_approximation ),
             close_gap_( close_gap ),
             round_to_convergence_( round_to_convergence ),
-            max_roundings_( max_roundings ) {
+            max_roundings_( max_roundings ),
+            start_state_( start_state ) {
         }
 
         /// maximum number of iterations (default = 10000)
@@ -106,6 +108,9 @@ public:
         ///
         /// Only has an effect with round_to_convergence = true 
         std::size_t max_roundings_;
+
+        /// starting state to use
+        std::vector< LabelType > start_state_;
     };
 
     /// returns the name of the inference algorithm, QpDC
@@ -160,6 +165,8 @@ private:
     /// makes sure to set diagonal entries to zero if convex approximation is deactivated
     void calcDiagonals( container& diagonals, typeWrap< false > dummy );
 
+    /// set state
+    void setState( const std::vector< LabelType >& state );
     /// initializes starting distribution according to method (see Parameter)
     void initProbabilities( int method );
     /// helper method to call constructor of cache container
@@ -200,7 +207,30 @@ QpDC< GM, ACC >::QpDC(
     prob_tmp( ctorHelper( gm ) ),
     aFactor( gm ) {
 
-    initProbabilities( parameter.init_method_ );
+    if( parameter.start_state_.size() == gm_.numberOfVariables() ) {
+        setState( parameter.start_state_ );
+    } else {
+        initProbabilities( parameter.init_method_ );
+    }
+}
+
+template< class GM, class ACC >
+void QpDC< GM, ACC >::setState( 
+    const std::vector< LabelType >& state
+) {
+    typename std::vector< LabelType >::const_iterator state_it = state.begin();
+    for( var_iterator pr_it = probabilities.begin(), pr_end = probabilities.end();
+         pr_it != pr_end;
+         ++pr_it, ++state_it
+       ) {
+        for( std::size_t label_n = 0, nr_labels = pr_it.row_size();
+             label_n < nr_labels;
+             ++label_n
+           ) {
+            if( label_n == *state_it ) { ( *pr_it )[ label_n ] = 1.0; }
+            else {                       ( *pr_it )[ label_n ] = 0.0; }
+        }
+    }
 }
 
 template< class GM, class ACC >
